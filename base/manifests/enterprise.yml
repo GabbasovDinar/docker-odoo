@@ -1,0 +1,11 @@
+# Odoo Enterprise manifest used when ODOO_EDITION=ee.
+# Uses git-aggregator syntax. Adjust repo/ref through environment variables.
+./enterprise:
+    remotes:
+        enterprise: ${ODOO_ENTERPRISE_REPO}
+    merges:
+        -
+            remote: enterprise
+            ref: "${ODOO_ENTERPRISE_REF}"
+            depth: 1
+    target: enterprise
