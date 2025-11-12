@@ -107,7 +107,7 @@ test_file = ${TEST_FILE}
 test_enable = ${TEST_ENABLE}
 
 ; --test-tags
-test_tags = ${TEST_FILE}
+test_tags = ${TEST_TAGS}
 
 ; --screencasts
 screencasts = ${SCREENCASTS}
