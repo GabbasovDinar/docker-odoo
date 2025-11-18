@@ -1,0 +1,50 @@
+# Global options
+{
+  email {$CADDY_EMAIL}
+}
+
+# Heder snippet
+(odoo_headers) {
+  header_up Host {host}
+}
+
+# Site snippet
+(odoo_site) {
+  encode zstd gzip
+
+  # Uncomment to enable basic auth to database manager
+  # @db_manager path /web/database/*
+
+  # handle @db_manager {
+  #   basic_auth {
+  #     <USER> <PASSHASH>
+  #   }
+
+  #   reverse_proxy odoo:8069 {
+  #     import odoo_headers
+  #   }
+  # }
+
+  # respond @db_manager 403
+
+  @realtime {
+    path /longpolling/* /websocket
+  }
+
+  handle @realtime {
+    reverse_proxy odoo:8072 {
+      import odoo_headers
+    }
+  }
+
+  handle {
+    reverse_proxy odoo:8069 {
+      import odoo_headers
+    }
+  }
+}
+
+# Site block
+{$CADDY_DOMAIN} {
+  import odoo_site
+}

@@ -51,6 +51,23 @@ services:
       - ${LOCAL_ADDONS_DIR:-./local-addons}:/opt/local-addons
     restart: unless-stopped
 
+  caddy:
+    image: caddy:2.8.4-alpine
+    depends_on:
+      - odoo
+    environment:
+      - CADDY_DOMAIN=${CADDY_DOMAIN}
+      - CADDY_EMAIL=${CADDY_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
   db:
     image: postgres:16-alpine
     environment:
@@ -64,3 +81,5 @@ services:
 volumes:
   db-data:
   odoo-data:
+  caddy-data:
+  caddy-config:
