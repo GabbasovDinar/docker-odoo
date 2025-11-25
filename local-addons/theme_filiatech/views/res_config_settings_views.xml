@@ -1,0 +1,33 @@
+<odoo>
+    <record id="res_config_settings_view_form_filiatech" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.filiatech.theme</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="website.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@id='website_settings']/h2" position="after">
+                <div class="app-settings-block" string="FiliaTech Theme">
+                    <h2>FiliaTech Theme</h2>
+                    <div class="row mt16">
+                        <div class="col-6">
+                            <field name="theme_filiatech_accent_primary" widget="colorpicker"/>
+                        </div>
+                        <div class="col-6">
+                            <field name="theme_filiatech_accent_secondary" widget="colorpicker"/>
+                        </div>
+                    </div>
+                    <div class="row mt16">
+                        <div class="col-6">
+                            <field name="theme_filiatech_show_cases"/>
+                        </div>
+                        <div class="col-6">
+                            <field name="theme_filiatech_show_blog"/>
+                        </div>
+                    </div>
+                    <p class="text-muted mt8">
+                        Adjust neon accents and toggle visibility of showcase blocks on the homepage.
+                    </p>
+                </div>
+            </xpath>
+        </field>
+    </record>
+</odoo>

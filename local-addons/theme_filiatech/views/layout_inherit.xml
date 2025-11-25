@@ -1,0 +1,20 @@
+<odoo>
+    <template id="layout_inherit" inherit_id="website.layout">
+        <xpath expr="//head" position="inside">
+            <t t-set="accent_primary" t-value="request.env['ir.config_parameter'].sudo().get_param('theme_filiatech.accent_primary', '#17e3c0')"/>
+            <t t-set="accent_secondary" t-value="request.env['ir.config_parameter'].sudo().get_param('theme_filiatech.accent_secondary', '#6c63ff')"/>
+            <style t-if="accent_primary or accent_secondary" type="text/css">
+                :root {
+                    --filiatech-accent: <t t-esc="accent_primary"/>;
+                    --filiatech-accent-2: <t t-esc="accent_secondary"/>;
+                }
+            </style>
+            <link rel="preconnect" href="https://fonts.googleapis.com"/>
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="crossorigin"/>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600&display=swap" rel="stylesheet"/>
+        </xpath>
+        <xpath expr="//body" position="attributes">
+            <attribute name="class" add="filiatech-theme" separator=" "/>
+        </xpath>
+    </template>
+</odoo>

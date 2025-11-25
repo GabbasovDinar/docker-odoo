@@ -1,0 +1,20 @@
+<odoo>
+    <data noupdate="1">
+        <record id="param_accent_primary" model="ir.config_parameter">
+            <field name="key">theme_filiatech.accent_primary</field>
+            <field name="value">#17e3c0</field>
+        </record>
+        <record id="param_accent_secondary" model="ir.config_parameter">
+            <field name="key">theme_filiatech.accent_secondary</field>
+            <field name="value">#6c63ff</field>
+        </record>
+        <record id="param_show_cases" model="ir.config_parameter">
+            <field name="key">theme_filiatech.show_cases</field>
+            <field name="value">True</field>
+        </record>
+        <record id="param_show_blog" model="ir.config_parameter">
+            <field name="key">theme_filiatech.show_blog</field>
+            <field name="value">True</field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,637 @@
+<odoo>
+    <template id="page_home" name="FiliaTech Home">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'filiatech_home'"/>
+            <t t-set="show_cases" t-value="request.env['ir.config_parameter'].sudo().get_param('theme_filiatech.show_cases', 'True') == 'True'"/>
+            <t t-set="show_blog" t-value="request.env['ir.config_parameter'].sudo().get_param('theme_filiatech.show_blog', 'True') == 'True'"/>
+            <div class="filiatech-hero position-relative overflow-hidden">
+                <div class="digital-grid"></div>
+                <div class="container position-relative">
+                    <div class="row align-items-center g-5">
+                        <div class="col-lg-6">
+                            <span class="filiatech-badge">FiliaTech · Odoo · AI</span>
+                            <h1 class="display-4 fw-bold mt-3">Автоматизируем ваш бизнес на Odoo с опорой на ИИ и опыт</h1>
+                            <p class="lead text-light mt-3">
+                                Проектируем и внедряем решения на Odoo, которые убирают рутину и усиливают ваш рост. Системно управляем внедрением, интеграциями и поддержкой.
+                            </p>
+                            <div class="d-flex flex-wrap gap-3 mt-4 btn-group">
+                                <a href="/contact-filiatech" class="btn filiatech-btn-primary">Получить консультацию</a>
+                                <a href="/filiatech-cases" class="btn filiatech-btn-secondary">Посмотреть кейсы</a>
+                            </div>
+                            <div class="d-flex gap-4 mt-4 text-muted">
+                                <div><strong class="text-light">10+</strong><br/>лет с Odoo</div>
+                                <div><strong class="text-light">40+</strong><br/>успешных внедрений</div>
+                                <div><strong class="text-light">SLA</strong><br/>поддержка 24/7</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="filiatech-card h-100 position-relative">
+                                <div class="position-absolute top-0 end-0 m-3 filiatech-badge">AI · Automation</div>
+                                <div class="p-4">
+                                    <h3 class="fw-semibold filiatech-gradient-text">Системный подход к развитию вашего бизнеса</h3>
+                                    <p class="text-muted mt-2">Полный цикл услуг по Odoo: разработка модулей, внедрение и поддержка.</p>
+                                    <ul class="list-unstyled mt-3 text-muted mb-0">
+                                        <li class="mb-2"><span class="me-2 filiatech-icon">⚙️</span>Диагностика процессов и приоритизация задач</li>
+                                        <li class="mb-2"><span class="me-2 filiatech-icon">🧩</span>Интеграции с CRM, складом, финансами и производством</li>
+                                        <li><span class="me-2 filiatech-icon">🚀</span>Быстрый запуск MVP и масштабирование решения</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="text-center mb-4">
+                        <h2>Наши ключевые направления</h2>
+                        <p class="section-subtitle">Внедрение, разработка и сопровождение Odoo с фокусом на измеримый результат.</p>
+                    </div>
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🏗️</div>
+                                <h4>Внедрение Odoo под ключ</h4>
+                                <p class="text-muted">Запуск системы с методологией поэтапного ввода, миграцией данных и обучением команды.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🔗</div>
+                                <h4>Кастомная разработка и интеграции</h4>
+                                <p class="text-muted">Создаём модули и API-интеграции, соединяя Odoo с экосистемой вашего бизнеса.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🤖</div>
+                                <h4>Автоматизация малого и среднего бизнеса</h4>
+                                <p class="text-muted">Оптимизируем CRM, продажи, склад, финансы, производство и сервисные процессы.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="row g-4 align-items-center">
+                        <div class="col-lg-5">
+                            <h2>С нами бизнес становится умнее</h2>
+                            <p class="section-subtitle">Мы создаём понятные процессы, прозрачные цифры и автоматизацию, которая работает за вас.</p>
+                        </div>
+                        <div class="col-lg-7">
+                            <div class="row g-3">
+                                <div class="col-sm-6">
+                                    <div class="filiatech-outline-card h-100">
+                                        <div class="filiatech-icon mb-3">⏱️</div>
+                                        <h5>Меньше ручной рутины</h5>
+                                        <p class="text-muted">Автоматизируем повторяющиеся операции и выстраиваем очереди задач.</p>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="filiatech-outline-card h-100">
+                                        <div class="filiatech-icon mb-3">📊</div>
+                                        <h5>Прозрачные процессы</h5>
+                                        <p class="text-muted">Дашборды, SLA и контроль точек качества для каждой роли.</p>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="filiatech-outline-card h-100">
+                                        <div class="filiatech-icon mb-3">⚡</div>
+                                        <h5>Быстрый старт</h5>
+                                        <p class="text-muted">Запускаем пилот за недели, показываем цифры и расширяем функционал.</p>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6">
+                                    <div class="filiatech-outline-card h-100">
+                                        <div class="filiatech-icon mb-3">🛡️</div>
+                                        <h5>Поддержка и развитие</h5>
+                                        <p class="text-muted">SLA-поддержка, регулярные релизы и постоянный мониторинг.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="text-center mb-4">
+                        <h2>Как мы работаем</h2>
+                        <p class="section-subtitle">Пять шагов, чтобы перейти от диагностики к устойчивой системе.</p>
+                    </div>
+                    <div class="filiatech-steps">
+                        <div class="filiatech-outline-card filiatech-step">
+                            <h5>Диагностика и консультация</h5>
+                            <p class="text-muted">Выявляем узкие места, собираем требования, согласуем KPI.</p>
+                        </div>
+                        <div class="filiatech-outline-card filiatech-step">
+                            <h5>Анализ процессов и проектирование</h5>
+                            <p class="text-muted">Проектируем архитектуру, интеграции и пользовательские сценарии.</p>
+                        </div>
+                        <div class="filiatech-outline-card filiatech-step">
+                            <h5>Внедрение и разработка</h5>
+                            <p class="text-muted">Настраиваем Odoo, создаём модули, подключаем API.</p>
+                        </div>
+                        <div class="filiatech-outline-card filiatech-step">
+                            <h5>Тестирование и обучение</h5>
+                            <p class="text-muted">Функциональное тестирование, обучение ключевых пользователей.</p>
+                        </div>
+                        <div class="filiatech-outline-card filiatech-step">
+                            <h5>Поддержка и развитие</h5>
+                            <p class="text-muted">SLA, улучшения, мониторинг производительности и безопасности.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="filiatech-section" t-if="show_cases">
+                <div class="container">
+                    <div class="text-center mb-4">
+                        <h2>Кейсы и результаты</h2>
+                        <p class="section-subtitle">Цифры и решения, которые мы построили на Odoo.</p>
+                    </div>
+                    <div class="filiatech-case-grid">
+                        <div class="filiatech-case-card">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="filiatech-badge">Ритейл</span>
+                                <span class="text-muted">+28% к скорости обработки заказов</span>
+                            </div>
+                            <h5>Единый склад и e-commerce</h5>
+                            <p class="text-muted mb-2">Интеграция Odoo с маркетплейсами, WMS и кассовым оборудованием.</p>
+                            <small class="text-muted">Модули: Inventory, eCommerce, Connector</small>
+                        </div>
+                        <div class="filiatech-case-card">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="filiatech-badge">Услуги</span>
+                                <span class="text-muted">-35% ручных операций</span>
+                            </div>
+                            <h5>Автоматизация сервисной компании</h5>
+                            <p class="text-muted mb-2">CRM, тикеты, биллинг и акты выполненных работ в единой системе.</p>
+                            <small class="text-muted">Модули: CRM, Helpdesk, Accounting</small>
+                        </div>
+                        <div class="filiatech-case-card">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="filiatech-badge">Производство</span>
+                                <span class="text-muted">-20% потерь сырья</span>
+                            </div>
+                            <h5>MES на базе Odoo</h5>
+                            <p class="text-muted mb-2">Управление маршрутами, контроль качества, планирование загрузки цехов.</p>
+                            <small class="text-muted">Модули: MRP, Quality, IoT</small>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="text-center mb-4">
+                        <h2>Нам доверяют</h2>
+                        <p class="section-subtitle">Выдерживаем SLA и говорим цифрами.</p>
+                    </div>
+                    <div class="row g-3 justify-content-center text-center">
+                        <div class="col-6 col-md-3"><div class="filiatech-outline-card py-4">TechFlow</div></div>
+                        <div class="col-6 col-md-3"><div class="filiatech-outline-card py-4">NovaRetail</div></div>
+                        <div class="col-6 col-md-3"><div class="filiatech-outline-card py-4">SkyLogix</div></div>
+                        <div class="col-6 col-md-3"><div class="filiatech-outline-card py-4">GreenFactory</div></div>
+                    </div>
+                    <div class="row g-3 mt-4">
+                        <div class="col-md-6">
+                            <div class="filiatech-card h-100">
+                                <p class="filiatech-quote">«FiliaTech быстро разобрались в наших процессах и вывели нас на новый уровень прозрачности. Теперь управляем проектами и финансами через единый контур.»</p>
+                                <div class="mt-3 text-muted">— COO, сервисная компания</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="filiatech-card h-100">
+                                <p class="filiatech-quote">«С минимальным простоями перенесли склад в Odoo, сделали интеграции с маркетплейсами и кассами. Внедрение окупилось за 6 месяцев.»</p>
+                                <div class="mt-3 text-muted">— Директор по операционной эффективности, ритейл</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="filiatech-section bg-dark" t-if="show_blog">
+                <div class="container">
+                    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+                        <div>
+                            <h2>Блог и статьи</h2>
+                            <p class="section-subtitle">Практика внедрения Odoo, советы по автоматизации, интеграции.</p>
+                        </div>
+                        <a href="/filiatech-blog" class="btn filiatech-btn-secondary">Все статьи</a>
+                    </div>
+                    <div class="filiatech-case-grid">
+                        <t t-set="posts" t-value="request.env['blog.post'].sudo().search([], limit=3, order='create_date desc')"/>
+                        <t t-foreach="posts" t-as="post">
+                            <article class="filiatech-case-card">
+                                <h5 class="mb-2"><a t-att-href="post.website_url" class="stretched-link">[[post.name]]</a></h5>
+                                <p class="text-muted" t-field="post.subtitle"/>
+                                <small class="text-muted">[[post.create_date.strftime('%d.%m.%Y') if post.create_date else '' ]] · [[post.author_id.name or 'FiliaTech']]</small>
+                            </article>
+                        </t>
+                        <t t-if="not posts">
+                            <div class="filiatech-case-card text-muted">Пока нет статей — скоро опубликуем новое.</div>
+                        </t>
+                    </div>
+                </div>
+            </section>
+
+            <section class="filiatech-section">
+                <div class="container text-center">
+                    <div class="filiatech-card py-4 px-5">
+                        <h3 class="mb-2">Готовы обсудить ваш проект?</h3>
+                        <p class="text-muted mb-3">Расскажите, что хотите автоматизировать — предложим концепт и быстрый пилот.</p>
+                        <a href="/contact-filiatech" class="btn filiatech-btn-primary">Оставить заявку</a>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <record id="page_home_record" model="website.page">
+        <field name="name">FiliaTech · Главная</field>
+        <field name="url">/filiatech</field>
+        <field name="view_id" ref="theme_filiatech.page_home"/>
+    </record>
+
+    <template id="page_services" name="FiliaTech Services">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'filiatech_services'"/>
+            <section class="filiatech-hero py-5">
+                <div class="digital-grid"></div>
+                <div class="container position-relative">
+                    <div class="row align-items-center g-4">
+                        <div class="col-lg-7">
+                            <h1 class="fw-bold">Услуги FiliaTech</h1>
+                            <p class="lead text-light">Полный цикл услуг по Odoo: проектируем, внедряем, поддерживаем.</p>
+                        </div>
+                        <div class="col-lg-5 text-lg-end">
+                            <a href="/contact-filiatech" class="btn filiatech-btn-primary">Оставить заявку</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🚀</div>
+                                <h4>Внедрение Odoo</h4>
+                                <p class="text-muted">Анализируем процессы, подбираем модули, планируем миграцию данных и запускаем систему.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🧩</div>
+                                <h4>Кастомная разработка</h4>
+                                <p class="text-muted">Модули, API, интеграции с 1С, CRM, WMS, платёжными и логистическими системами.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🤖</div>
+                                <h4>Автоматизация процессов</h4>
+                                <p class="text-muted">CRM, продажи, склад, финансы, производство, сервис и проекты с единой аналитикой.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🔍</div>
+                                <h4>Консалтинг и аудит</h4>
+                                <p class="text-muted">Аудит текущей системы, рекомендации по производительности, безопасности и UX.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="filiatech-card h-100">
+                                <div class="filiatech-icon mb-3">🛟</div>
+                                <h4>Аутсорс-сопровождение</h4>
+                                <p class="text-muted">Поддержка по SLA, мониторинг, резервные копии, мелкие доработки и оптимизация.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container text-center">
+                    <div class="filiatech-card py-4 px-5">
+                        <h3 class="mb-2">Расскажите о своём бизнесе — предложим подход к автоматизации</h3>
+                        <p class="text-muted mb-3">Соберём требования, покажем пилот и roadmap.</p>
+                        <a href="/contact-filiatech" class="btn filiatech-btn-primary">Оставить заявку</a>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <record id="page_services_record" model="website.page">
+        <field name="name">FiliaTech · Услуги</field>
+        <field name="url">/filiatech-services</field>
+        <field name="view_id" ref="theme_filiatech.page_services"/>
+    </record>
+
+    <template id="page_solutions" name="FiliaTech Solutions">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'filiatech_solutions'"/>
+            <section class="filiatech-hero py-5">
+                <div class="digital-grid"></div>
+                <div class="container position-relative">
+                    <h1 class="fw-bold">Решения и отрасли</h1>
+                    <p class="lead text-light">Практические сценарии автоматизации под отрасли: ритейл, услуги, производство, дистрибуция.</p>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="filiatech-outline-card h-100">
+                                <div class="filiatech-badge mb-2">Ритейл</div>
+                                <h5>Единый контур продаж</h5>
+                                <p class="text-muted">Маркетплейсы, e-commerce, POS, склад и доставка — синхронизированы.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="filiatech-outline-card h-100">
+                                <div class="filiatech-badge mb-2">Услуги</div>
+                                <h5>CRM + Helpdesk</h5>
+                                <p class="text-muted">Лиды, тикеты, проекты и акты — с прозрачным биллингом и SLA.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="filiatech-outline-card h-100">
+                                <div class="filiatech-badge mb-2">Производство</div>
+                                <h5>MES и планирование</h5>
+                                <p class="text-muted">Маршруты, оборудование, контроль качества и интеграция с IoT.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="filiatech-outline-card h-100">
+                                <div class="filiatech-badge mb-2">Дистрибуция</div>
+                                <h5>Склад и логистика</h5>
+                                <p class="text-muted">WMS, управление запасами, интеграции с ТК и планирование доставки.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="filiatech-outline-card h-100">
+                                <div class="filiatech-badge mb-2">FinTech</div>
+                                <h5>Финансы и отчётность</h5>
+                                <p class="text-muted">Консолидация данных, платежные шлюзы, автоматизация CFO-отчётности.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="filiatech-outline-card h-100">
+                                <div class="filiatech-badge mb-2">HR/Recruiting</div>
+                                <h5>HR & Payroll</h5>
+                                <p class="text-muted">Подбор, адаптация, грейды, зарплаты и OKR в одном окне.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <record id="page_solutions_record" model="website.page">
+        <field name="name">FiliaTech · Решения</field>
+        <field name="url">/filiatech-solutions</field>
+        <field name="view_id" ref="theme_filiatech.page_solutions"/>
+    </record>
+
+    <template id="page_cases" name="FiliaTech Cases">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'filiatech_cases'"/>
+            <section class="filiatech-hero py-5">
+                <div class="digital-grid"></div>
+                <div class="container position-relative">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <div>
+                            <h1 class="fw-bold">Проекты и кейсы</h1>
+                            <p class="lead text-light">Фильтры по отраслям, краткие результаты и использованные модули.</p>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap">
+                            <span class="filiatech-badge">Ритейл</span>
+                            <span class="filiatech-badge">Услуги</span>
+                            <span class="filiatech-badge">Производство</span>
+                            <span class="filiatech-badge">Дистрибуция</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="filiatech-case-grid">
+                        <div class="filiatech-case-card">
+                            <div class="filiatech-badge mb-2">Ритейл</div>
+                            <h5>Маркетплейсы + WMS</h5>
+                            <p class="text-muted">Синхронизация номенклатуры, заказов и остатков, контроль сборок и отгрузок.</p>
+                            <small class="text-muted">Модули: Inventory, eCommerce, Accounting</small>
+                        </div>
+                        <div class="filiatech-case-card">
+                            <div class="filiatech-badge mb-2">Услуги</div>
+                            <h5>Сервисная платформа</h5>
+                            <p class="text-muted">Helpdesk, SLA, биллинг и генерация актов с электронным согласованием.</p>
+                            <small class="text-muted">Модули: Helpdesk, CRM, Sign</small>
+                        </div>
+                        <div class="filiatech-case-card">
+                            <div class="filiatech-badge mb-2">Производство</div>
+                            <h5>Цифровой цех</h5>
+                            <p class="text-muted">Маршруты, планирование смен, IoT-датчики, контроль качества.</p>
+                            <small class="text-muted">Модули: MRP, Quality, IoT</small>
+                        </div>
+                        <div class="filiatech-case-card">
+                            <div class="filiatech-badge mb-2">Дистрибуция</div>
+                            <h5>Транспорт и запасы</h5>
+                            <p class="text-muted">WMS, мульти-склады, интеграции с ТК и отслеживание поставок в реальном времени.</p>
+                            <small class="text-muted">Модули: Inventory, Purchase, Fleet</small>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <record id="page_cases_record" model="website.page">
+        <field name="name">FiliaTech · Кейсы</field>
+        <field name="url">/filiatech-cases</field>
+        <field name="view_id" ref="theme_filiatech.page_cases"/>
+    </record>
+
+    <template id="page_about" name="FiliaTech About">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'filiatech_about'"/>
+            <section class="filiatech-hero py-5">
+                <div class="digital-grid"></div>
+                <div class="container position-relative">
+                    <h1 class="fw-bold">О компании FiliaTech</h1>
+                    <p class="lead text-light">Фокус на Odoo, автоматизации и измеримых результатах для малого и среднего бизнеса.</p>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="row g-4 align-items-start">
+                        <div class="col-lg-6">
+                            <div class="filiatech-card h-100">
+                                <h4>Кто мы</h4>
+                                <p class="text-muted">Мы — команда консультантов, архитекторов и разработчиков Odoo. Помогаем компаниям избавиться от ручных процессов, выстроить прозрачную аналитику и интегрировать Odoo с существующей IT-инфраструктурой.</p>
+                                <p class="text-muted">Работаем по гибкой методологии, выпускаем регулярные релизы и держим SLA.</p>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="row g-3">
+                                <div class="col-sm-6"><div class="filiatech-outline-card h-100"><h5>Экспертиза Odoo</h5><p class="text-muted">10+ лет внедрения, собственные библиотеки интеграций.</p></div></div>
+                                <div class="col-sm-6"><div class="filiatech-outline-card h-100"><h5>Методология</h5><p class="text-muted">Диагностика, roadmap, быстрые пилоты и контроль KPI.</p></div></div>
+                                <div class="col-sm-6"><div class="filiatech-outline-card h-100"><h5>Прозрачность</h5><p class="text-muted">Дашборды, SLA, открытый бэклог и демо каждые спринты.</p></div></div>
+                                <div class="col-sm-6"><div class="filiatech-outline-card h-100"><h5>Безопасность</h5><p class="text-muted">Резервные копии, аудит доступов, тесты и мониторинг.</p></div></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="text-center mb-4">
+                        <h2>Команда FiliaTech</h2>
+                        <p class="section-subtitle">Люди, которые отвечают за результат.</p>
+                    </div>
+                    <div class="filiatech-team-grid">
+                        <div class="filiatech-card filiatech-team-card text-center">
+                            <img src="https://placehold.co/120x120" alt="Team" class="mb-2" width="120" height="120"/>
+                            <h5 class="mb-1">Анна Петрова</h5>
+                            <p class="text-muted">Delivery Director</p>
+                        </div>
+                        <div class="filiatech-card filiatech-team-card text-center">
+                            <img src="https://placehold.co/120x120" alt="Team" class="mb-2" width="120" height="120"/>
+                            <h5 class="mb-1">Илья Смирнов</h5>
+                            <p class="text-muted">Lead Solution Architect</p>
+                        </div>
+                        <div class="filiatech-card filiatech-team-card text-center">
+                            <img src="https://placehold.co/120x120" alt="Team" class="mb-2" width="120" height="120"/>
+                            <h5 class="mb-1">Мария Иванова</h5>
+                            <p class="text-muted">Head of Integrations</p>
+                        </div>
+                        <div class="filiatech-card filiatech-team-card text-center">
+                            <img src="https://placehold.co/120x120" alt="Team" class="mb-2" width="120" height="120"/>
+                            <h5 class="mb-1">Дмитрий Волков</h5>
+                            <p class="text-muted">QA & Security Lead</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <record id="page_about_record" model="website.page">
+        <field name="name">FiliaTech · О компании</field>
+        <field name="url">/about-filiatech</field>
+        <field name="view_id" ref="theme_filiatech.page_about"/>
+    </record>
+
+    <template id="page_blog" name="FiliaTech Blog">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'filiatech_blog'"/>
+            <section class="filiatech-hero py-5">
+                <div class="digital-grid"></div>
+                <div class="container position-relative">
+                    <h1 class="fw-bold">Блог FiliaTech</h1>
+                    <p class="lead text-light">Статьи про внедрение Odoo, интеграции, автоматизацию и лучшие практики.</p>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="filiatech-card filiatech-blog-list">
+                        <t t-set="posts" t-value="request.env['blog.post'].sudo().search([], order='create_date desc')"/>
+                        <t t-foreach="posts" t-as="post">
+                            <article>
+                                <h4 class="mb-1"><a t-att-href="post.website_url" class="text-decoration-none">[[post.name]]</a></h4>
+                                <p class="text-muted mb-1" t-field="post.subtitle"/>
+                                <small class="text-muted">[[post.create_date.strftime('%d.%m.%Y') if post.create_date else '' ]] · [[post.author_id.name or 'FiliaTech']]</small>
+                            </article>
+                        </t>
+                        <t t-if="not posts">
+                            <div class="text-muted">Статей пока нет. Подготовим материалы о наших внедрениях.</div>
+                        </t>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <record id="page_blog_record" model="website.page">
+        <field name="name">FiliaTech · Блог</field>
+        <field name="url">/filiatech-blog</field>
+        <field name="view_id" ref="theme_filiatech.page_blog"/>
+    </record>
+
+    <template id="page_contact" name="FiliaTech Contacts">
+        <t t-call="website.layout">
+            <t t-set="pageName" t-value="'filiatech_contact'"/>
+            <section class="filiatech-hero py-5">
+                <div class="digital-grid"></div>
+                <div class="container position-relative">
+                    <h1 class="fw-bold">Контакты FiliaTech</h1>
+                    <p class="lead text-light">Оставьте заявку — предложим план внедрения и автоматизации.</p>
+                </div>
+            </section>
+            <section class="filiatech-section">
+                <div class="container">
+                    <div class="row g-4">
+                        <div class="col-lg-6">
+                            <div class="filiatech-card h-100">
+                                <h4 class="mb-3">Свяжитесь с нами</h4>
+                                <form action="/website_form" method="post" class="o_website_form" data-model_name="mail.mail" data-success_page="/thank-you" enctype="multipart/form-data">
+                                    <input type="hidden" name="contact_name" value="FiliaTech Webform"/>
+                                    <div class="mb-3">
+                                        <label class="form-label">Имя</label>
+                                        <input class="form-control filiatech-input" type="text" name="name" required="required" placeholder="Ваше имя"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Компания</label>
+                                        <input class="form-control filiatech-input" type="text" name="company" placeholder="Компания"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Email</label>
+                                        <input class="form-control filiatech-input" type="email" name="email_from" required="required" placeholder="you@example.com"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Телефон</label>
+                                        <input class="form-control filiatech-input" type="text" name="phone" placeholder="+7 (999) 000-00-00"/>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Комментарий</label>
+                                        <textarea class="form-control filiatech-input" name="body" rows="4" placeholder="Опишите задачу"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn filiatech-btn-primary">Отправить</button>
+                                </form>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="filiatech-card h-100">
+                                <h4>Контакты</h4>
+                                <p class="text-muted">Email: <a href="mailto:hello@filiatech.com">hello@filiatech.com</a><br/>Телефон: <a href="tel:+74951234567">+7 (495) 123-45-67</a></p>
+                                <p class="text-muted">Мессенджеры: Telegram @filiatech, WhatsApp +7 (999) 123-45-67</p>
+                                <div class="mt-3">
+                                    <h6>Офис</h6>
+                                    <p class="text-muted">Москва, ул. Примерная, 10</p>
+                                </div>
+                                <div class="mt-3">
+                                    <h6>Карта</h6>
+                                    <div style="border-radius: 16px; overflow: hidden; border: 1px solid var(--filiatech-border); background: #0b1020; min-height: 200px;" class="d-flex align-items-center justify-content-center text-muted">Тёмная карта</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <record id="page_contact_record" model="website.page">
+        <field name="name">FiliaTech · Контакты</field>
+        <field name="url">/contact-filiatech</field>
+        <field name="view_id" ref="theme_filiatech.page_contact"/>
+    </record>
+</odoo>
