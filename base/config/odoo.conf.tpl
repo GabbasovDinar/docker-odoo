@@ -89,7 +89,7 @@ http_enable = ${HTTP_ENABLE}
 xmlrpcs = ${XMLRPCS}
 
 ; --report-url
-report.url = ${REPORT_URL}
+report.url = ${ODOO_REPORT_URL}
 
 ; --proxy-mode
 proxy_mode = ${PROXY_MODE}

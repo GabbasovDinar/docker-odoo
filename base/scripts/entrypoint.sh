@@ -42,6 +42,94 @@ if command -v wait-for-psql.py >/dev/null 2>&1; then
   WF_ARGS=(--db_host "${DB_HOST}" --db_port "${DB_PORT}" --db_user "${DB_USER}" --db_password "${DB_PASSWORD}" --timeout=30)
   wait-for-psql.py "${WF_ARGS[@]}"
 fi
+
+config_value() {
+  local key="$1"
+
+  awk -F= -v key="${key}" '
+    $1 ~ "^[[:space:]]*" key "[[:space:]]*$" {
+      value = $0
+      sub(/^[^=]*=/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      print value
+      exit
+    }
+  ' "${ODOO_RC}"
+}
+
+psql_odoo() {
+  local db_name="$1"
+  shift
+
+  PGPASSWORD="${DB_PASSWORD}" psql \
+    -h "${DB_HOST}" \
+    -p "${DB_PORT}" \
+    -U "${DB_USER}" \
+    -d "${db_name}" \
+    -v ON_ERROR_STOP=1 \
+    -q \
+    "$@"
+}
+
+sync_odoo_config_parameter() {
+  local db_name="$1"
+  local key="$2"
+  local value="$3"
+
+  [[ -n "${value}" ]] || return 0
+
+  psql_odoo "${db_name}" \
+    -v param_key="${key}" \
+    -v param_value="${value}" <<'SQL'
+INSERT INTO ir_config_parameter (key, value, create_uid, write_uid, create_date, write_date)
+VALUES (:'param_key', :'param_value', 1, 1, now(), now())
+ON CONFLICT (key)
+DO UPDATE SET value = EXCLUDED.value, write_uid = 1, write_date = now();
+SQL
+}
+
+start_odoo_url_parameter_sync() {
+  local report_url="${ODOO_REPORT_URL:-${REPORT_URL:-}}"
+  local base_url="${ODOO_BASE_URL:-}"
+  local base_url_freeze="${ODOO_BASE_URL_FREEZE:-}"
+  local db_name="${DB_NAME:-}"
+
+  [[ -n "${report_url}${base_url}" ]] || return 0
+
+  if ! command -v psql >/dev/null 2>&1; then
+    echo "Skipping Odoo URL parameter sync: psql is not installed" >&2
+    return 0
+  fi
+
+  if [[ -z "${db_name}" ]]; then
+    db_name="$(config_value db_name || true)"
+  fi
+  if [[ -z "${db_name}" ]]; then
+    echo "Skipping Odoo URL parameter sync: db_name is not configured" >&2
+    return 0
+  fi
+
+  if [[ -n "${base_url}" && -z "${base_url_freeze}" ]]; then
+    base_url_freeze="True"
+  fi
+
+  (
+    deadline=$((SECONDS + 120))
+    while ((SECONDS < deadline)); do
+      if [[ "$(psql_odoo "${db_name}" -Atqc "SELECT to_regclass('public.ir_config_parameter') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
+        sync_odoo_config_parameter "${db_name}" "report.url" "${report_url}"
+        sync_odoo_config_parameter "${db_name}" "web.base.url" "${base_url}"
+        sync_odoo_config_parameter "${db_name}" "web.base.url.freeze" "${base_url_freeze}"
+        echo "Synced Odoo URL parameters in database ${db_name}"
+        return 0
+      fi
+      sleep 2
+    done
+
+    echo "Skipping Odoo URL parameter sync: ir_config_parameter was not ready within 120s" >&2
+  ) &
+}
+
 # --- Command dispatcher
 if [[ $# -eq 0 ]]; then
   set -- odoo
@@ -50,13 +138,16 @@ fi
 case "$1" in
   odoo)
     shift || true
+    start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   --)
     shift || true
+    start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   -*)
+    start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   *)

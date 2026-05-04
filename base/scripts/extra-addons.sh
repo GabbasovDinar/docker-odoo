@@ -253,8 +253,8 @@ for repo in "${TMP_ADDONS_DIR}"/*; do
     awk '$0 !~ /^[[:space:]]*#/ && NF' "${repo}/requirements.txt" >> "${combined_reqs}"
   fi
 
-  manifestoo -d "${repo}" list-external-dependencies python --transitive --ignore-missing --separator=, \
-    | tr ',' '\n' >> "${combined_reqs}" || true
+  manifestoo -d "${repo}" list-external-dependencies python --transitive --ignore-missing --separator='|' \
+    | tr '|' '\n' >> "${combined_reqs}" || true
 done
 
 # Deduplicate and sort

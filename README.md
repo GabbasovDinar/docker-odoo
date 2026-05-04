@@ -1,7 +1,7 @@
 # docker-odoo
 
 Two-stage Docker setup for Odoo 18. The `base/` Dockerfile builds a reusable
-runtime with wkhtmltopdf, PostgreSQL tooling and helper scripts. The
+runtime with PostgreSQL tooling, helper scripts and a kwkhtmltopdf client. The
 `addons/` Dockerfile consumes that image, pulls the repositories declared in
 `addons/addons.yml` and installs extra Python dependencies so the resulting
 image can run Odoo with your custom modules baked in.
@@ -21,7 +21,7 @@ image can run Odoo with your custom modules baked in.
 │   └── requirements.txt        # extra Python dependencies installed at build time
 ├── caddy/
 │   ├── Caddyfile               # Caddy reverse-proxy config
-├── docker-compose.yml          # example stack (Odoo + PostgreSQL + Caddy)
+├── docker-compose.yml          # example stack (Odoo + PostgreSQL + Caddy + kwkhtmltopdf)
 ├── makefile                    # quality-of-life commands
 ├── .env.example                # template for environment variables
 ```
@@ -114,6 +114,62 @@ Run `make help` to see a full list of available targets and their descriptions. 
 
 The stack exposes Odoo on port 8069 by default. Adjust the port mapping inside
 `docker-compose.yml` if you need a different host port.
+
+### PDF rendering with kwkhtmltopdf
+
+PDF rendering is delegated to a private
+[`kwkhtmltopdf`](https://github.com/acsone/kwkhtmltopdf) service instead of
+installing the full wkhtmltopdf runtime into the Odoo image. The Odoo image only
+contains the upstream drop-in `wkhtmltopdf` client, which sends rendering jobs
+to `KWKHTMLTOPDF_SERVER_URL`.
+
+The Compose setup keeps the renderer off public ports:
+
+* `kwkhtmltopdf` has no published host ports.
+* `kwkhtmltopdf` is attached only to the private Compose `reports` network.
+* `odoo` is attached to both the default app network and the `reports` network.
+* `ODOO_REPORT_URL=http://odoo:8069` lets the renderer fetch report assets from
+  Odoo without going through the public reverse proxy.
+
+The Odoo container synchronizes URL-related system parameters on startup, using
+the same pattern as `camptocamp/docker-odoo-project`:
+
+* `ODOO_REPORT_URL` writes `ir.config_parameter` key `report.url`.
+* `ODOO_BASE_URL` writes `ir.config_parameter` key `web.base.url`.
+* `ODOO_BASE_URL_FREEZE` writes `ir.config_parameter` key
+  `web.base.url.freeze`. If `ODOO_BASE_URL` is set and this variable is empty,
+  the entrypoint defaults it to `True`.
+
+For local Docker, keep both URLs internal:
+
+```dotenv
+ODOO_REPORT_URL=http://odoo:8069
+ODOO_BASE_URL=http://odoo:8069
+ODOO_BASE_URL_FREEZE=True
+```
+
+For production behind Caddy or another reverse proxy, keep report fetching
+internal but set the public base URL for emails, portal links and callbacks:
+
+```dotenv
+ODOO_REPORT_URL=http://odoo:8069
+ODOO_BASE_URL=https://your-domain.example
+ODOO_BASE_URL_FREEZE=True
+```
+
+Do not publish `kwkhtmltopdf:8080` to the host or route it through Caddy. The
+upstream project explicitly treats the server as private infrastructure, not as
+a service for untrusted clients. The renderer can still make outbound requests
+through Docker networking, which keeps external fonts, stylesheets and images
+working when reports reference trusted public URLs. If a deployment must forbid
+outbound access from the renderer, set `reports.internal: true` in
+`docker-compose.yml` and keep all report assets served by Odoo or another
+trusted internal service.
+
+The upstream image is published for `linux/amd64`. The default Compose file sets
+`KWKHTMLTOPDF_PLATFORM=linux/amd64`; on Apple Silicon this means Docker will run
+the renderer through amd64 emulation. For native arm64 production hosts, build
+and pin your own multi-arch image through `KWKHTMLTOPDF_IMAGE`.
 
 ### Using Caddy as an HTTPS reverse proxy
 
@@ -247,6 +303,9 @@ valid ACME certificates. The easiest path is to lean on the special
    CADDY_DOMAIN=odoo.localhost
    CADDY_EMAIL=local@example.test   # arbitrary for local use
    PROXY_MODE=True                  # let Odoo trust Caddy's headers
+   ODOO_REPORT_URL=http://odoo:8069 # renderer fetches assets inside Docker
+   ODOO_BASE_URL=http://odoo:8069   # keep report assets reachable from containers
+   ODOO_BASE_URL_FREEZE=True        # browser requests must not rewrite web.base.url
    ```
 
 3. Start the stack and open `https://odoo.localhost`:
@@ -264,6 +323,11 @@ valid ACME certificates. The easiest path is to lean on the special
 
    Import `caddy-local-root.crt` into your OS/browser trust store to clear TLS
    warnings. When finished, run `make down` to stop the containers.
+
+4. `odoo.localhost` is for your browser. The renderer container should use
+   `http://odoo:8069`, because that hostname resolves inside Docker. The Odoo
+   entrypoint writes these values into `ir.config_parameter` automatically after
+   the database is ready.
 
 ## Environment configuration
 
@@ -305,7 +369,9 @@ The remaining groups unlock optional behaviour:
 * **Build context & filesystem paths** — adjust `ADDONS_YML`,
   `LOCAL_ADDONS_DIR`, Odoo source refs, or the generated `ODOO_RC` path.
 * **Module loading & demo data** — toggle `INIT`, `UPDATE`, demo fixtures,
-  `ODOO_EXTRA_OPTS`, and reporting settings like `REPORT_URL`.
+  `ODOO_EXTRA_OPTS`, and reporting settings like `ODOO_REPORT_URL`.
+* **PDF rendering** — configure the private `kwkhtmltopdf` image, platform,
+  upstream client ref and internal server URL.
 * **HTTP, proxy & realtime** — map ports, enable `PROXY_MODE`, or fine-tune
   websocket rate limits.
 * **Logging & diagnostics / Email / Internationalisation** — configure

@@ -19,6 +19,7 @@ ARG ODOO_EDITION=ce
 ARG ODOO_CE_VERSION=18.0
 ARG ODOO_CE_REF=
 ARG ODOO_EE_VERSION=18.0
+ARG KWKHTMLTOPDF_CLIENT_REF=1.0
 # --- Enterprise variables
 ARG ODOO_EE_ADDONS_DIR=/opt/enterprise-addons
 ARG ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
@@ -28,8 +29,6 @@ ARG ODOO_EE_GIT_TOKEN=
 ARG ODOO_EE_GIT_HOST=github.com
 # --- PostgreSQL variables
 ARG POSTGRES_VERSION=16
-# --- Target architecture
-ARG TARGETARCH
 
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 ENV LANG=C.UTF-8
@@ -48,15 +47,10 @@ RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -qq --n
     libcairo2-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# --- wkhtmltopdf
-RUN if [ -z "${TARGETARCH}" ]; then \
-    TARGETARCH="$(dpkg --print-architecture)"; \
-    fi; \
-    curl -sSL https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/wkhtmltox_0.12.6.1-3.bookworm_${TARGETARCH}.deb -o /tmp/wkhtml.deb \
-    && apt-get update -qq \
-    && dpkg --force-depends -i /tmp/wkhtml.deb \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -qq -f --no-install-recommends \
-    && rm /tmp/wkhtml.deb && rm -rf /var/lib/apt/lists/*
+# --- wkhtmltopdf drop-in client for the external kwkhtmltopdf service
+RUN curl -fsSL "https://raw.githubusercontent.com/acsone/kwkhtmltopdf/${KWKHTMLTOPDF_CLIENT_REF}/client/python/kwkhtmltopdf_client.py" \
+        -o /usr/local/bin/wkhtmltopdf \
+    && chmod +x /usr/local/bin/wkhtmltopdf
 
 # --- PostgreSQL client
 RUN install -d -m 0755 /usr/share/keyrings \
@@ -106,7 +100,7 @@ COPY base/scripts/extra-addons.sh   /
 COPY base/config/odoo.conf.tpl      /usr/local/share/odoo/tmpl/odoo.conf.tpl
 COPY base/manifests/enterprise.yml  /usr/local/share/odoo/manifests/enterprise.yml
 
-RUN chmod +x /usr/local/bin/wait-for-psql.py /entrypoint.sh /extra-addons.sh && chown -R odoo:odoo /run/odoo
+RUN chmod +x /usr/local/bin/wait-for-psql.py /usr/local/bin/wkhtmltopdf /entrypoint.sh /extra-addons.sh && chown -R odoo:odoo /run/odoo
 
 # --- Create base odoo config file
 RUN printf "[options]\ndata_dir = %s\n" "${ODOO_DATA_DIR}" > "${ODOO_RC}" && chown odoo:odoo "${ODOO_RC}"
@@ -119,6 +113,7 @@ ENV ODOO_RC=${ODOO_RC} \
     ADDONS_DIR=${ADDONS_DIR} \
     EXTRA_ADDONS_DIR=${EXTRA_ADDONS_DIR} \
     ODOO_EE_ADDONS_DIR=${ODOO_EE_ADDONS_DIR} \
+    KWKHTMLTOPDF_SERVER_URL=http://kwkhtmltopdf:8080 \
     TMP_ADDONS_DIR=/tmp/getaddons \
     HOME=${ODOO_DATA_DIR}
 

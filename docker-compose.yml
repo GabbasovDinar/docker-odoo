@@ -26,6 +26,7 @@ services:
         ODOO_ENTERPRISE_REPO: ${ODOO_ENTERPRISE_REPO:-https://github.com/odoo/enterprise.git} # EE repository URL
         ODOO_LOG_DIR: ${ODOO_LOG_DIR:-/var/log/odoo} # Odoo log directory
         EXTRA_ADDONS_DIR: ${EXTRA_ADDONS_DIR:-/opt/extra-addons} # Extra addons directory
+        KWKHTMLTOPDF_CLIENT_REF: ${KWKHTMLTOPDF_CLIENT_REF:-1.0} # kwkhtmltopdf client Git tag/commit
         POSTGRES_VERSION: ${POSTGRES_VERSION:-16} # PostgreSQL client version
     image: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-18.0}
     profiles: ["build"]
@@ -41,16 +42,41 @@ services:
       ODOO_ENV_FILE: "/run/odoo/.env"
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      ODOO_REPORT_URL: ${ODOO_REPORT_URL:-}
+      ODOO_BASE_URL: ${ODOO_BASE_URL:-}
+      ODOO_BASE_URL_FREEZE: ${ODOO_BASE_URL_FREEZE:-}
+      KWKHTMLTOPDF_SERVER_URL: ${KWKHTMLTOPDF_SERVER_URL:-http://kwkhtmltopdf:8080}
     depends_on:
       - db
+      - kwkhtmltopdf
     ports:
       - "8069:8069"
+    networks:
+      - default
+      - reports
     volumes:
       - ./.env:/run/odoo/.env:ro # Environment variables file for generating Odoo config file and extra addons installation (for private repository authentication)
       - odoo-data:/var/lib/odoo
       - ${LOCAL_ADDONS_DIR:-./local-addons}:/opt/local-addons
+    restart: unless-stopped
+
+  kwkhtmltopdf:
+    image: ${KWKHTMLTOPDF_IMAGE:-ghcr.io/acsone/kwkhtmltopdf:0.12.6.1-latest}
+    platform: ${KWKHTMLTOPDF_PLATFORM:-linux/amd64}
+    expose:
+      - "8080"
+    networks:
+      - reports
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   caddy:
@@ -85,3 +111,6 @@ volumes:
   odoo-data:
   caddy-data:
   caddy-config:
+
+networks:
+  reports:
