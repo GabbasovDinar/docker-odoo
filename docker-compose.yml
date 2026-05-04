@@ -48,10 +48,24 @@ services:
       ODOO_REPORT_URL: ${ODOO_REPORT_URL:-}
       ODOO_BASE_URL: ${ODOO_BASE_URL:-}
       ODOO_BASE_URL_FREEZE: ${ODOO_BASE_URL_FREEZE:-}
+      ODOO_SESSION_REDIS: ${ODOO_SESSION_REDIS:-1}
+      ODOO_SESSION_REDIS_HOST: ${ODOO_SESSION_REDIS_HOST:-redis}
+      ODOO_SESSION_REDIS_PORT: ${ODOO_SESSION_REDIS_PORT:-6379}
+      ODOO_SESSION_REDIS_URL: ${ODOO_SESSION_REDIS_URL:-}
+      ODOO_SESSION_REDIS_PASSWORD: ${ODOO_SESSION_REDIS_PASSWORD:-${REDIS_PASSWORD}}
+      ODOO_SESSION_REDIS_PREFIX: ${ODOO_SESSION_REDIS_PREFIX:-${DATABASE_NAME:-odoo}}
+      ODOO_SESSION_REDIS_EXPIRATION: ${ODOO_SESSION_REDIS_EXPIRATION:-604800}
+      ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS: ${ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS:-10800}
+      ODOO_SESSION_REDIS_SSL: ${ODOO_SESSION_REDIS_SSL:-0}
+      ODOO_SESSION_REDIS_SSL_CERT_REQS: ${ODOO_SESSION_REDIS_SSL_CERT_REQS:-0}
       KWKHTMLTOPDF_SERVER_URL: ${KWKHTMLTOPDF_SERVER_URL:-http://kwkhtmltopdf:8080}
     depends_on:
-      - db
-      - kwkhtmltopdf
+      db:
+        condition: service_started
+      kwkhtmltopdf:
+        condition: service_started
+      redis:
+        condition: service_healthy
     ports:
       - "8069:8069"
     networks:
@@ -77,6 +91,37 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+    restart: unless-stopped
+
+  redis:
+    image: ${REDIS_IMAGE:-redis:7.4-alpine}
+    user: redis
+    command: >
+      sh -c 'exec redis-server
+      --appendonly yes
+      --requirepass "$${REDIS_PASSWORD}"
+      --maxmemory "$${REDIS_MAXMEMORY}"
+      --maxmemory-policy "$${REDIS_MAXMEMORY_POLICY}"'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_MAXMEMORY: ${REDIS_MAXMEMORY:-256mb}
+      REDIS_MAXMEMORY_POLICY: ${REDIS_MAXMEMORY_POLICY:-noeviction}
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid,nodev
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     restart: unless-stopped
 
   caddy:
@@ -109,6 +154,7 @@ services:
 volumes:
   db-data:
   odoo-data:
+  redis-data:
   caddy-data:
   caddy-config:
 

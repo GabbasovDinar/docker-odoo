@@ -130,6 +130,22 @@ start_odoo_url_parameter_sync() {
   ) &
 }
 
+cleanup_filesystem_sessions_for_redis() {
+  case "${ODOO_SESSION_REDIS:-0}" in
+    1|true|True|TRUE|yes|Yes|YES)
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  local session_dir="${ODOO_SESSION_DIR:-${DATA_DIR:-/var/lib/odoo}/sessions}"
+  [[ -d "${session_dir}" ]] || return 0
+
+  find "${session_dir}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+  echo "Removed old filesystem sessions from ${session_dir}; Redis session storage is enabled"
+}
+
 # --- Command dispatcher
 if [[ $# -eq 0 ]]; then
   set -- odoo
@@ -138,15 +154,18 @@ fi
 case "$1" in
   odoo)
     shift || true
+    cleanup_filesystem_sessions_for_redis
     start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   --)
     shift || true
+    cleanup_filesystem_sessions_for_redis
     start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   -*)
+    cleanup_filesystem_sessions_for_redis
     start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;

@@ -20,3 +20,13 @@
             ref: "18.0"
             depth: 1
     target: oca-server-tools
+
+./camptocamp-odoo-cloud-platform:
+    remotes:
+        remote_1: https://github.com/camptocamp/odoo-cloud-platform.git
+    merges:
+        -
+            remote: remote_1
+            ref: "18.0"
+            depth: 1
+    target: camptocamp-odoo-cloud-platform

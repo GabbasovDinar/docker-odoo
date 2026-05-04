@@ -10,10 +10,11 @@ ADDONS_SERVICE ?= odoo
 DB_SERVICE ?= db
 CADDY_SERVICE ?= caddy
 WKHTMLTOPDF_SERVICE ?= kwkhtmltopdf
+REDIS_SERVICE ?= redis
 
 .PHONY: check-env
 check-env:
-	@test -f .env || { printf "Missing .env. Run: cp .env.example .env\n"; exit 1; }
+	@test -f .env || { printf "Missing .env. Creating from .env.example\n"; cp .env.example .env; }
 
 .PHONY: help
 help: ## Show available targets
@@ -87,6 +88,10 @@ log-caddy: ## Follow Caddy logs
 .PHONY: log-wkhtmltopdf
 log-wkhtmltopdf: ## Follow kwkhtmltopdf logs
 	$(COMPOSE) logs -f --tail=200 $(WKHTMLTOPDF_SERVICE)
+
+.PHONY: log-redis
+log-redis: ## Follow Redis logs
+	$(COMPOSE) logs -f --tail=200 $(REDIS_SERVICE)
 
 .PHONY: ps
 ps: ## Show service status

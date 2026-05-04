@@ -21,7 +21,7 @@ image can run Odoo with your custom modules baked in.
 │   └── requirements.txt        # extra Python dependencies installed at build time
 ├── caddy/
 │   ├── Caddyfile               # Caddy reverse-proxy config
-├── docker-compose.yml          # example stack (Odoo + PostgreSQL + Caddy + kwkhtmltopdf)
+├── docker-compose.yml          # stack: Odoo + PostgreSQL + Redis + Caddy + kwkhtmltopdf
 ├── makefile                    # quality-of-life commands
 ├── .env.example                # template for environment variables
 ```
@@ -98,7 +98,7 @@ Useful targets for day-to-day operations:
 * `make down` — stop and remove containers (named volumes remain).
 * `make down-v` — stop services and remove containers, networks and volumes.
 * `make logs` — follow logs from all services.
-* `make log-odoo`, `make log-db`, `make log-caddy`,
+* `make log-odoo`, `make log-db`, `make log-redis`, `make log-caddy`,
   `make log-wkhtmltopdf` — follow logs from one service.
 * `make sh` — open an interactive shell in the Odoo container.
 * `make odoo-shell` — open `odoo shell -c /etc/odoo.conf --no-http`.
@@ -110,6 +110,53 @@ wrap long Docker Compose commands so you do not have to remember them.
 
 The stack exposes Odoo on port 8069 by default. Adjust the port mapping inside
 `docker-compose.yml` if you need a different host port.
+
+### Redis-backed sessions
+
+HTTP sessions are stored in Redis through Camptocamp's
+[`session_redis`](https://github.com/camptocamp/odoo-cloud-platform/tree/18.0/session_redis)
+addon. This is required when Odoo runs with multiple workers or multiple app
+containers, because sessions should not live only on one container filesystem.
+
+The addons image fetches `camptocamp/odoo-cloud-platform` from
+`addons/addons.yml`, and `.env.example` loads the module as a server-wide addon:
+
+```dotenv
+LOAD=web,session_redis
+```
+
+The bundled Redis service is private to Docker Compose:
+
+* no Redis port is published on the host;
+* Odoo waits for the Redis healthcheck before starting;
+* Redis requires `REDIS_PASSWORD`;
+* Redis stores data on the named `redis-data` volume;
+* the container runs with dropped Linux capabilities and `no-new-privileges`.
+
+Default local settings:
+
+```dotenv
+REDIS_PASSWORD=change-me
+ODOO_SESSION_REDIS=1
+ODOO_SESSION_REDIS_HOST=redis
+ODOO_SESSION_REDIS_PORT=6379
+ODOO_SESSION_REDIS_URL=
+ODOO_SESSION_REDIS_PASSWORD=
+ODOO_SESSION_REDIS_PREFIX=${DATABASE_NAME}
+ODOO_SESSION_REDIS_EXPIRATION=604800
+ODOO_SESSION_REDIS_EXPIRATION_ANONYMOUS=10800
+ODOO_SESSION_REDIS_SSL=0
+ODOO_SESSION_REDIS_SSL_CERT_REQS=0
+```
+
+`ODOO_SESSION_REDIS_PASSWORD` can stay empty in this Compose stack; Odoo then
+uses `REDIS_PASSWORD`. Set it explicitly only when Odoo connects to an external
+Redis. `ODOO_SESSION_REDIS_SSL=0` is intentional for the bundled Redis service:
+traffic stays inside the private Docker network. For an external TLS Redis,
+prefer `ODOO_SESSION_REDIS_URL=rediss://...` and adjust certificate validation.
+
+Enabling Redis sessions invalidates existing filesystem sessions, so users will
+need to log in again after the first restart with `session_redis` loaded.
 
 ### PDF rendering with kwkhtmltopdf
 
@@ -365,7 +412,10 @@ The remaining groups unlock optional behaviour:
 * **Build context & filesystem paths** — adjust `ADDONS_YML`,
   `LOCAL_ADDONS_DIR`, Odoo source refs, or the generated `ODOO_RC` path.
 * **Module loading & demo data** — toggle `INIT`, `UPDATE`, demo fixtures,
-  `ODOO_EXTRA_OPTS`, and reporting settings like `ODOO_REPORT_URL`.
+  server-wide modules like `session_redis`, and reporting settings like
+  `ODOO_REPORT_URL`.
+* **Redis-backed sessions** — configure the private Redis service and
+  `ODOO_SESSION_REDIS*` variables.
 * **PDF rendering** — configure the private `kwkhtmltopdf` image, platform,
   upstream client ref and internal server URL.
 * **HTTP, proxy & realtime** — map ports, enable `PROXY_MODE`, or fine-tune
@@ -426,8 +476,10 @@ modules into the image.
 
 * `make psql` is useful for checking database connectivity when Odoo fails to
   start.
+* `make log-redis` is useful when users are repeatedly logged out or Odoo cannot
+  initialize `session_redis`.
 * `make down-v` removes both Postgres and Odoo volumes, which is required if you
-  change database credentials.
+  change database credentials. It also removes Redis sessions.
 * Logs from the Odoo container already include the rendered configuration path:
   `/etc/odoo.conf`.
 
@@ -435,4 +487,6 @@ modules into the image.
 
 * [Odoo 18 documentation](https://www.odoo.com/documentation/18.0/)
 * [git-aggregator](https://github.com/acsone/git-aggregator)
+* [Camptocamp session_redis](https://github.com/camptocamp/odoo-cloud-platform/tree/18.0/session_redis)
 * [Docker Compose CLI reference](https://docs.docker.com/engine/reference/commandline/compose/)
+* [`kwkhtmltopdf service`](https://github.com/acsone/kwkhtmltopdf)
