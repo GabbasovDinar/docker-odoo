@@ -8,17 +8,21 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 BASE_SERVICE ?= odoo-core
 ADDONS_SERVICE ?= odoo
 
+.PHONY: check-env
+check-env: ## Ensure .env exists
+	@test -f .env || { printf "Missing .env. Run: cp .env.example .env\n"; exit 1; }
+
 .PHONY: help
 help: ## Show available targets
 	@printf "Usage: make <target>\n\n"
 	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_.-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
 .PHONY: build-base
-build-base: ## Build the reusable Odoo base image
+build-base: check-env ## Build the reusable Odoo base image
 	$(COMPOSE) --profile build build $(BASE_SERVICE)
 
 .PHONY: build-addons
-build-addons: ## Build the project addons layer
+build-addons: check-env ## Build the project addons layer
 	$(COMPOSE) build $(ADDONS_SERVICE)
 
 .PHONY: build
@@ -41,7 +45,7 @@ pull: ## Pull the latest service images
 	$(COMPOSE) pull
 
 .PHONY: up
-up: ## Start the stack in detached mode (build on demand)
+up: build-base ## Start the stack in detached mode (build on demand)
 	$(COMPOSE) up -d --build
 
 .PHONY: start

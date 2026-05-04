@@ -21,7 +21,7 @@ image can run Odoo with your custom modules baked in.
 │   └── requirements.txt        # extra Python dependencies installed at build time
 ├── caddy/
 │   ├── Caddyfile               # Caddy reverse-proxy config
-├── docker-compose.yml          # example stack (Odoo + PostgreSQL + wkhtmltopdf)
+├── docker-compose.yml          # example stack (Odoo + PostgreSQL + Caddy)
 ├── makefile                    # quality-of-life commands
 ├── .env.example                # template for environment variables
 ```
@@ -31,7 +31,7 @@ image can run Odoo with your custom modules baked in.
 ```bash
 cp .env.example .env
 make build        # build odoo-core-* and odoo-* images
-make up           # start postgres + odoo in the background
+make up           # build missing layers and start the stack in the background
 make logs         # tail the Odoo logs
 ```
 
@@ -48,6 +48,7 @@ docker compose -f docker-compose.yml --profile build build odoo-core
 ODOO_EDITION=ce docker compose -f docker-compose.yml build odoo
 
 # Start the stack
+docker compose -f docker-compose.yml --profile build build odoo-core
 docker compose -f docker-compose.yml up -d --build
 ```
 
@@ -66,6 +67,26 @@ Compose invocations:
 Enterprise builds require valid credentials for the private `odoo/enterprise`
 repository. Populate the token variables in `.env` and use `make build-ee` (or
 set `ODOO_EDITION=ee` when running `make build-base` / `make build-addons`).
+
+### Reproducible Odoo source builds
+
+`ODOO_VERSION=18.0` is convenient, but it tracks the moving upstream 18.0 branch.
+For reproducible rebuilds, pin the exact Git commit in `.env`:
+
+```bash
+ODOO_VERSION=18.0
+ODOO_CE_REF=<odoo-community-commit-sha>
+```
+
+For Enterprise builds, pin the private addons ref as well:
+
+```bash
+ODOO_EDITION=ee
+ODOO_ENTERPRISE_REF=<odoo-enterprise-commit-sha>
+```
+
+Leaving these refs empty falls back to `ODOO_VERSION`, which is fine for tracking
+the latest upstream branch during normal maintenance.
 
 ## Running the stack
 
@@ -98,6 +119,11 @@ The stack exposes Odoo on port 8069 by default. Adjust the port mapping inside
 
 This repository ships with a [Caddy](https://caddyserver.com/) service that can
 terminate TLS certificates from Let's Encrypt and proxy traffic to Odoo.
+The Compose stack starts Caddy by default and binds host ports `80` and `443`,
+which is the intended production path. If those ports are already used by an
+external reverse proxy, either change the Caddy port mappings in
+`docker-compose.yml` or remove/disable the `caddy` service and point the external
+proxy at `odoo:8069` and `odoo:8072`.
 
 1. Point your DNS records at the host running the stack (for example, add
    `A`/`AAAA` records for `example.com`).
@@ -253,8 +279,9 @@ valid ACME certificates. The easiest path is to lean on the special
 
 The first block in `.env.example` contains the bare minimum to get a stack up:
 
-* `ODOO_VERSION`, `ODOO_EDITION` — pin the upstream release and choose between
-  Community or Enterprise images.
+* `ODOO_VERSION`, `ODOO_CE_REF`, `ODOO_EDITION` — choose the upstream series,
+  optionally pin the exact Community commit, and choose between Community or
+  Enterprise images.
 * `ADMIN_PASSWORD` — master password required for database management inside
   Odoo.
 * `LIST_DB`, `DBFILTER` — control whether the login page lists databases and
@@ -276,7 +303,7 @@ as `DB_MAXCONN` and `DB_TEMPLATE`.
 The remaining groups unlock optional behaviour:
 
 * **Build context & filesystem paths** — adjust `ADDONS_YML`,
-  `LOCAL_ADDONS_DIR`, or the generated `ODOO_RC` path.
+  `LOCAL_ADDONS_DIR`, Odoo source refs, or the generated `ODOO_RC` path.
 * **Module loading & demo data** — toggle `INIT`, `UPDATE`, demo fixtures,
   `ODOO_EXTRA_OPTS`, and reporting settings like `REPORT_URL`.
 * **HTTP, proxy & realtime** — map ports, enable `PROXY_MODE`, or fine-tune

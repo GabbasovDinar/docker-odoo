@@ -18,6 +18,68 @@ set -euo pipefail
 
 ADDONS_FILE=""
 
+load_env_file() {
+  local env_file="$1"
+
+  if [[ ! -r "${env_file}" ]]; then
+    if [[ -e "${env_file}" ]]; then
+      echo "WARNING: --env-file provided but not readable: ${env_file}" >&2
+    else
+      echo "INFO: --env-file provided but not found: ${env_file} (continuing without it)" >&2
+    fi
+    return 0
+  fi
+
+  echo "INFO: Loading environment variables from ${env_file}" >&2
+  while IFS='=' read -r key value; do
+    case "${key}" in
+      GITHUB_HOST|GITLAB_HOST|GIT_HOST|GITHUB_USER|GITLAB_USER|GIT_USER|GITHUB_TOKEN|GITLAB_TOKEN|GIT_TOKEN)
+        printf -v "${key}" '%s' "${value}"
+        export "${key?}"
+        ;;
+    esac
+  done < <(python3 - "${env_file}" <<'PY'
+import re
+import sys
+
+path = sys.argv[1]
+key_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def store(key, value):
+    if key_re.match(key):
+        print(f"{key}={value}")
+
+
+with open(path, encoding="utf-8") as fh:
+    for raw in fh:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        if "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.rstrip("\r")
+
+        if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+            try:
+                value = bytes(value[1:-1], "utf-8").decode("unicode_escape")
+            except Exception:
+                value = value[1:-1]
+        elif value.startswith("'") and value.endswith("'") and len(value) >= 2:
+            value = value[1:-1]
+        else:
+            value = re.split(r"\s+#", value, 1)[0].strip()
+
+        store(key, value)
+PY
+  )
+}
+
 # -------------------- Pre-scan only --env-file ----
 ARGS=("$@")
 for ((i=0; i<${#ARGS[@]}; i++)); do
@@ -31,19 +93,9 @@ for ((i=0; i<${#ARGS[@]}; i++)); do
   esac
 done
 
-# -------------------- Source .env  ----------------
+# -------------------- Load selected .env variables --------------------
 if [[ -n "${ENV_FILE:-}" ]]; then
-  if [[ -r "${ENV_FILE}" ]]; then
-    echo "INFO: Loading environment variables from ${ENV_FILE}" >&2
-    set -a
-    # shellcheck source=/dev/null
-    . "${ENV_FILE}"
-    set +a
-  elif [[ -e "${ENV_FILE}" ]]; then
-    echo "WARNING: --env-file provided but not readable: ${ENV_FILE}" >&2
-  else
-    echo "INFO: --env-file provided but not found: ${ENV_FILE} (continuing without it)" >&2
-  fi
+  load_env_file "${ENV_FILE}"
 else
   echo "INFO: No --env-file provided; relying on environment variables." >&2
 fi
@@ -197,18 +249,16 @@ combined_reqs="${ADDONS_DIR}/requirements.txt"
 for repo in "${TMP_ADDONS_DIR}"/*; do
   [[ -d "${repo}" ]] || continue
 
-  # a) detect explicit requirements.txt in repo
   if [[ -f "${repo}/requirements.txt" ]]; then
     awk '$0 !~ /^[[:space:]]*#/ && NF' "${repo}/requirements.txt" >> "${combined_reqs}"
-  else
-    # b) no explicit requirements.txt — use manifestoo external python deps
-    manifestoo -d "${repo}" list-external-dependencies python --transitive --ignore-missing --separator=, \
-      | tr ',' '\n' >> "${combined_reqs}"
   fi
+
+  manifestoo -d "${repo}" list-external-dependencies python --transitive --ignore-missing --separator=, \
+    | tr ',' '\n' >> "${combined_reqs}" || true
 done
 
 # Deduplicate and sort
-sort -u "${combined_reqs}" -o "${combined_reqs}"
+awk 'NF' "${combined_reqs}" | sort -u -o "${combined_reqs}"
 
 # Install if non-empty
 if [[ -s "${combined_reqs}" ]]; then

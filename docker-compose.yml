@@ -18,13 +18,15 @@ services:
         # ODOO_EE_GIT_HOST: ${GIT_HOST:-github.com} # Git host (e.g. github.com, gitlab.com, etc.)
 
         # Optional Arguments (you can change default values if needed just uncomment and change the values in .env file)
-        # ODOO_CE_VERSION: ${ODOO_CE_VERSION} # CE version or tags
-        # ODOO_EE_VERSION: ${ODOO_EE_VERSION} # EE version or tags
-        # ODOO_EE_ADDONS_DIR: ${ODOO_EE_ADDONS_DIR} # EE addons directory
-        # ODOO_ENTERPRISE_REPO: ${ODOO_ENTERPRISE_REPO} # EE repository URL (e.g. you can use your own private repository for ee addons)
-        # ODOO_LOG_DIR: ${ODOO_LOG_DIR} # Odoo log directory
-        # EXTRA_ADDONS_DIR: ${EXTRA_ADDONS_DIR} # Extra addons directory
-        # POSTGRES_VERSION: ${POSTGRES_VERSION} # PostgreSQL version
+        ODOO_CE_VERSION: ${ODOO_CE_VERSION:-${ODOO_VERSION:-18.0}} # CE series/tag used as a fallback
+        ODOO_CE_REF: ${ODOO_CE_REF:-${ODOO_CE_VERSION:-${ODOO_VERSION:-18.0}}} # CE branch/tag/commit to fetch
+        ODOO_EE_VERSION: ${ODOO_EE_VERSION:-${ODOO_VERSION:-18.0}} # EE series/tag used as a fallback
+        ODOO_ENTERPRISE_REF: ${ODOO_ENTERPRISE_REF:-${ODOO_EE_VERSION:-${ODOO_VERSION:-18.0}}} # EE branch/tag/commit to fetch
+        ODOO_EE_ADDONS_DIR: ${ODOO_EE_ADDONS_DIR:-/opt/enterprise-addons} # EE addons directory
+        ODOO_ENTERPRISE_REPO: ${ODOO_ENTERPRISE_REPO:-https://github.com/odoo/enterprise.git} # EE repository URL
+        ODOO_LOG_DIR: ${ODOO_LOG_DIR:-/var/log/odoo} # Odoo log directory
+        EXTRA_ADDONS_DIR: ${EXTRA_ADDONS_DIR:-/opt/extra-addons} # Extra addons directory
+        POSTGRES_VERSION: ${POSTGRES_VERSION:-16} # PostgreSQL client version
     image: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-18.0}
     profiles: ["build"]
 

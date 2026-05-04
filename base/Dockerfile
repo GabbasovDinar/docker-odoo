@@ -17,6 +17,7 @@ ARG DOCKER_ODOO_GID=9999
 ARG ODOO_EDITION=ce
 # CE or EE version or tags
 ARG ODOO_CE_VERSION=18.0
+ARG ODOO_CE_REF=
 ARG ODOO_EE_VERSION=18.0
 # --- Enterprise variables
 ARG ODOO_EE_ADDONS_DIR=/opt/enterprise-addons
@@ -76,7 +77,8 @@ RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # --- Install odoo python requirements
-RUN curl -fsSL "https://raw.githubusercontent.com/odoo/odoo/${ODOO_CE_VERSION}/requirements.txt" -o /tmp/odoo-req.txt \
+RUN ODOO_SOURCE_HEAD="${ODOO_CE_REF:-${ODOO_CE_VERSION}}" \
+    && curl -fsSL "https://raw.githubusercontent.com/odoo/odoo/${ODOO_SOURCE_HEAD}/requirements.txt" -o /tmp/odoo-req.txt \
     && pip install --no-cache-dir -r /tmp/odoo-req.txt \
     && rm -f /tmp/odoo-req.txt
 
@@ -84,9 +86,10 @@ RUN curl -fsSL "https://raw.githubusercontent.com/odoo/odoo/${ODOO_CE_VERSION}/r
 RUN groupadd --gid ${DOCKER_ODOO_GID} odoo && useradd odoo -u ${DOCKER_ODOO_UID} -g ${DOCKER_ODOO_GID} -m -s /bin/bash
 
 # --- Source Odoo
-ARG ODOO_HEAD=${ODOO_CE_VERSION}
+ARG ODOO_HEAD=
 RUN mkdir /tmp/getodoo \
-    && (curl -sSL https://github.com/odoo/odoo/tarball/$ODOO_HEAD | tar -C /tmp/getodoo -xz) \
+    && ODOO_SOURCE_HEAD="${ODOO_HEAD:-${ODOO_CE_REF:-${ODOO_CE_VERSION}}}" \
+    && (curl -fsSL "https://github.com/odoo/odoo/tarball/${ODOO_SOURCE_HEAD}" | tar -C /tmp/getodoo -xz) \
     && mv /tmp/getodoo/* ${ODOO_DIR} \
     && rmdir /tmp/getodoo
 
@@ -105,7 +108,7 @@ COPY base/manifests/enterprise.yml  /usr/local/share/odoo/manifests/enterprise.y
 
 RUN chmod +x /usr/local/bin/wait-for-psql.py /entrypoint.sh /extra-addons.sh && chown -R odoo:odoo /run/odoo
 
-# --- Create base odoo config file 
+# --- Create base odoo config file
 RUN printf "[options]\ndata_dir = %s\n" "${ODOO_DATA_DIR}" > "${ODOO_RC}" && chown odoo:odoo "${ODOO_RC}"
 
 # --- Create directories for extra addons and filestore, set ownership to `odoo`
@@ -142,7 +145,7 @@ RUN if [ "$ODOO_EDITION" = "ee" ]; then \
 VOLUME ["${ODOO_DATA_DIR}"]
 
 # Expose Odoo services
-EXPOSE 8069 8071 8072    
+EXPOSE 8069 8071 8072
 
 # Set default user when running the container
 USER odoo

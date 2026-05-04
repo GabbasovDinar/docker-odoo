@@ -214,7 +214,7 @@ translate_in = ${TRANSLATE_IN}
 ; --i18n-overwrite
 overwrite_existing_translations = ${OVERWRITE_EXISTING_TRANSLATIONS}
 
-; --modules 
+; --modules
 translate_modules = ${TRANSLATE_MODULES}
 
 ;----------;
