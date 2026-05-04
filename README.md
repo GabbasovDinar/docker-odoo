@@ -30,9 +30,9 @@ image can run Odoo with your custom modules baked in.
 
 ```bash
 cp .env.example .env
-make build        # build odoo-core-* and odoo-* images
-make up           # build missing layers and start the stack in the background
-make logs         # tail the Odoo logs
+make init         # validate .env and build odoo-core-* + odoo-* images
+make start        # start all services in the background
+make logs         # follow logs from all services
 ```
 
 All Make targets read from the `.env` file in the project root. The Compose file
@@ -43,30 +43,30 @@ If you prefer raw Docker Compose commands you can reproduce the Makefile
 behaviour manually:
 
 ```bash
-# Build both images
+# Prepare both images
 docker compose -f docker-compose.yml --profile build build odoo-core
-ODOO_EDITION=ce docker compose -f docker-compose.yml build odoo
+docker compose -f docker-compose.yml build odoo
 
 # Start the stack
-docker compose -f docker-compose.yml --profile build build odoo-core
-docker compose -f docker-compose.yml up -d --build
+docker compose -f docker-compose.yml up -d
 ```
 
 ## Building images
 
-The Makefile exposes common combinations so you do not have to remember full
-Compose invocations:
+The main build target is:
+
+* `make init` — validate `.env`, build the reusable core image, then build the
+  project addons image.
+
+Useful partial rebuilds:
 
 * `make build-base` — build only the reusable core image (`odoo-core-*`).
 * `make build-addons` — build only the project addons image (`odoo-*`).
-* `make build` — build both stages.
 * `make rebuild-addons` — rebuild the addons stage without cache.
-* `make build-ce` / `make build-ee` — convenience aliases that set
-  `ODOO_EDITION` for Community or Enterprise.
 
 Enterprise builds require valid credentials for the private `odoo/enterprise`
-repository. Populate the token variables in `.env` and use `make build-ee` (or
-set `ODOO_EDITION=ee` when running `make build-base` / `make build-addons`).
+repository. Populate the token variables in `.env`, set `ODOO_EDITION=ee`, then
+run `make init`.
 
 ### Reproducible Odoo source builds
 
@@ -92,25 +92,21 @@ the latest upstream branch during normal maintenance.
 
 Useful targets for day-to-day operations:
 
-* `make up`, `make start` — start all services in detached mode.
+* `make start` — start all services in detached mode.
 * `make stop` — stop services without removing containers.
 * `make restart` — restart the running services.
 * `make down` — stop and remove containers (named volumes remain).
 * `make down-v` — stop services and remove containers, networks and volumes.
-* `make logs`, `make logs-db` — follow the Odoo or PostgreSQL logs.
+* `make logs` — follow logs from all services.
+* `make log-odoo`, `make log-db`, `make log-caddy`,
+  `make log-wkhtmltopdf` — follow logs from one service.
 * `make sh` — open an interactive shell in the Odoo container.
+* `make odoo-shell` — open `odoo shell -c /etc/odoo.conf --no-http`.
 * `make psql` — open a `psql` session against PostgreSQL.
 * `make config` — print the rendered Compose configuration.
 
-## Additional make targets
-
-The Makefile also exposes a few utility commands that are handy when managing your stack:
-
-* `make pull` — download the latest base images defined in docker-compose.yml.
-* `make ps` — show the status of services and their port mappings.
-* `make prune` — remove unused build cache layers from the Docker daemon.
-
-Run `make help` to see a full list of available targets and their descriptions. These helpers wrap long docker compose commands so you do not have to remember them.
+Run `make help` to see the useful targets exposed by the Makefile. These helpers
+wrap long Docker Compose commands so you do not have to remember them.
 
 The stack exposes Odoo on port 8069 by default. Adjust the port mapping inside
 `docker-compose.yml` if you need a different host port.
@@ -189,7 +185,7 @@ proxy at `odoo:8069` and `odoo:8072`.
    * `CADDY_EMAIL` to the email address Caddy should use when requesting
      certificates.
    * `PROXY_MODE=True` so Odoo honours `X-Forwarded-*` headers from the proxy.
-3. Start the stack as usual (`make up` or `docker compose up -d`). Caddy will
+3. Start the stack as usual (`make start` or `docker compose up -d`). Caddy will
    listen on ports 80/443, obtain certificates automatically, and forward
    `/longpolling` and `/websocket` traffic to port 8072 while proxying regular
    HTTP requests to port 8069. Odoo 18's realtime bus uses WebSockets when
@@ -311,7 +307,7 @@ valid ACME certificates. The easiest path is to lean on the special
 3. Start the stack and open `https://odoo.localhost`:
 
    ```bash
-   make up
+   make start
    ```
 
    Caddy will issue a local certificate from its internal authority. Your
@@ -417,7 +413,7 @@ Modules dropped into that directory become available after a restart.
 During the addons build stage you can install additional Python packages required
 by your custom modules. List these packages in `addons/requirements.txt`
 (one per line, lines beginning with # are ignored) and they will be installed
-into the image when you run make build-addons or make build.
+into the image when you run `make build-addons` or `make init`.
 
 ## Updating addons
 

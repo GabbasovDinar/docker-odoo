@@ -7,9 +7,12 @@ export COMPOSE_DOCKER_CLI_BUILD=1
 
 BASE_SERVICE ?= odoo-core
 ADDONS_SERVICE ?= odoo
+DB_SERVICE ?= db
+CADDY_SERVICE ?= caddy
+WKHTMLTOPDF_SERVICE ?= kwkhtmltopdf
 
 .PHONY: check-env
-check-env: ## Ensure .env exists
+check-env:
 	@test -f .env || { printf "Missing .env. Run: cp .env.example .env\n"; exit 1; }
 
 .PHONY: help
@@ -25,34 +28,29 @@ build-base: check-env ## Build the reusable Odoo base image
 build-addons: check-env ## Build the project addons layer
 	$(COMPOSE) build $(ADDONS_SERVICE)
 
+.PHONY: init
+init: check-env build-base build-addons ## Fully prepare the stack: validate .env and build base + addons images
+
 .PHONY: build
-build: build-base build-addons ## Build both images (base and addons)
-
-.PHONY: build-ce
-build-ce: ## Build Community Edition images
-	@$(MAKE) build ODOO_EDITION=ce
-
-.PHONY: build-ee
-build-ee: ## Build Enterprise Edition images (requires EE credentials)
-	@$(MAKE) build ODOO_EDITION=ee
+build: init
 
 .PHONY: rebuild-addons
 rebuild-addons: ## Rebuild the addons image without using cache
 	$(COMPOSE) build --no-cache $(ADDONS_SERVICE)
 
 .PHONY: pull
-pull: ## Pull the latest service images
+pull:
 	$(COMPOSE) pull
 
-.PHONY: up
-up: build-base ## Start the stack in detached mode (build on demand)
-	$(COMPOSE) up -d --build
-
 .PHONY: start
-start: up ## Alias for `make up`
+start: check-env ## Start all runtime services in detached mode
+	$(COMPOSE) up -d
+
+.PHONY: up
+up: start
 
 .PHONY: stop
-stop: ## Stop running services without removing resources
+stop: ## Stop all running services without removing containers or volumes
 	$(COMPOSE) stop
 
 .PHONY: restart
@@ -68,12 +66,27 @@ down-v: ## Stop services and remove containers, networks and volumes
 	$(COMPOSE) down -v --remove-orphans
 
 .PHONY: logs
-logs: ## Tail Odoo logs
+logs: ## Follow logs from all services
+	$(COMPOSE) logs -f --tail=200
+
+.PHONY: log-odoo
+log-odoo: ## Follow Odoo logs
 	$(COMPOSE) logs -f --tail=200 $(ADDONS_SERVICE)
 
+.PHONY: log-db
+log-db: ## Follow PostgreSQL logs
+	$(COMPOSE) logs -f --tail=200 $(DB_SERVICE)
+
 .PHONY: logs-db
-logs-db: ## Tail PostgreSQL logs
-	$(COMPOSE) logs -f --tail=200 db
+logs-db: log-db
+
+.PHONY: log-caddy
+log-caddy: ## Follow Caddy logs
+	$(COMPOSE) logs -f --tail=200 $(CADDY_SERVICE)
+
+.PHONY: log-wkhtmltopdf
+log-wkhtmltopdf: ## Follow kwkhtmltopdf logs
+	$(COMPOSE) logs -f --tail=200 $(WKHTMLTOPDF_SERVICE)
 
 .PHONY: ps
 ps: ## Show service status
@@ -83,14 +96,18 @@ ps: ## Show service status
 sh: ## Shell into the Odoo container (reuse or run)
 	$(COMPOSE) exec $(ADDONS_SERVICE) bash || $(COMPOSE) run --rm $(ADDONS_SERVICE) bash
 
+.PHONY: odoo-shell
+odoo-shell: ## Open Odoo shell without starting HTTP
+	$(COMPOSE) exec $(ADDONS_SERVICE) odoo shell -c $${ODOO_RC:-/etc/odoo.conf} --no-http
+
 .PHONY: psql
 psql: ## Open psql session against PostgreSQL
-	$(COMPOSE) exec db psql -U $${DB_USER:-odoo} -d $${DB_NAME:-postgres} || $(COMPOSE) run --rm db psql -U $${DB_USER:-odoo} -d $${DB_NAME:-postgres}
+	$(COMPOSE) exec $(DB_SERVICE) psql -U $${DB_USER:-odoo} -d $${DB_NAME:-postgres} || $(COMPOSE) run --rm $(DB_SERVICE) psql -U $${DB_USER:-odoo} -d $${DB_NAME:-postgres}
 
 .PHONY: config
 config: ## Render the effective Compose configuration
 	$(COMPOSE) config
 
 .PHONY: prune
-prune: ## Prune Docker builder cache
+prune:
 	docker builder prune -f
