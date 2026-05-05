@@ -18,88 +18,6 @@ set -euo pipefail
 
 ADDONS_FILE=""
 
-load_env_file() {
-  local env_file="$1"
-
-  if [[ ! -r "${env_file}" ]]; then
-    if [[ -e "${env_file}" ]]; then
-      echo "WARNING: --env-file provided but not readable: ${env_file}" >&2
-    else
-      echo "INFO: --env-file provided but not found: ${env_file} (continuing without it)" >&2
-    fi
-    return 0
-  fi
-
-  echo "INFO: Loading environment variables from ${env_file}" >&2
-  while IFS='=' read -r key value; do
-    case "${key}" in
-      GITHUB_HOST|GITLAB_HOST|GIT_HOST|GITHUB_USER|GITLAB_USER|GIT_USER|GITHUB_TOKEN|GITLAB_TOKEN|GIT_TOKEN)
-        printf -v "${key}" '%s' "${value}"
-        export "${key?}"
-        ;;
-    esac
-  done < <(python3 - "${env_file}" <<'PY'
-import re
-import sys
-
-path = sys.argv[1]
-key_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def store(key, value):
-    if key_re.match(key):
-        print(f"{key}={value}")
-
-
-with open(path, encoding="utf-8") as fh:
-    for raw in fh:
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[7:].lstrip()
-        if "=" not in line:
-            continue
-
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.rstrip("\r")
-
-        if value.startswith('"') and value.endswith('"') and len(value) >= 2:
-            try:
-                value = bytes(value[1:-1], "utf-8").decode("unicode_escape")
-            except Exception:
-                value = value[1:-1]
-        elif value.startswith("'") and value.endswith("'") and len(value) >= 2:
-            value = value[1:-1]
-        else:
-            value = re.split(r"\s+#", value, 1)[0].strip()
-
-        store(key, value)
-PY
-  )
-}
-
-# -------------------- Pre-scan only --env-file ----
-ARGS=("$@")
-for ((i=0; i<${#ARGS[@]}; i++)); do
-  case "${ARGS[i]}" in
-    --env-file=*)
-      ENV_FILE="${ARGS[i]#*=}"
-      ;;
-    --env-file)
-      if (( i+1 < ${#ARGS[@]} )); then ENV_FILE="${ARGS[i+1]}"; fi
-      ;;
-  esac
-done
-
-# -------------------- Load selected .env variables --------------------
-if [[ -n "${ENV_FILE:-}" ]]; then
-  load_env_file "${ENV_FILE}"
-else
-  echo "INFO: No --env-file provided; relying on environment variables." >&2
-fi
-
 # -------------------- Args --------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -107,9 +25,6 @@ while [[ $# -gt 0 ]]; do
     --addons-file=*)     ADDONS_FILE="${1#*=}"; shift ;;
     --addons-dir)        ADDONS_DIR="${2:-}"; shift 2 ;;
     --addons-dir=*)      ADDONS_DIR="${1#*=}"; shift ;;
-    --env-file)          ENV_FILE="${2:-}"; shift 2 ;;
-    --env-file=*)        ENV_FILE="${1#*=}"; shift ;;
-
     --github-user)       GITHUB_USER="${2:-}"; shift 2 ;;
     --github-user=*)     GITHUB_USER="${1#*=}"; shift ;;
     --github-token)      GITHUB_TOKEN="${2:-}"; shift 2 ;;
@@ -213,11 +128,7 @@ fi
 # -------------------- Aggregate --------------------
 (
   cd "$TMP_ADDONS_DIR"
-  if [[ -n "${ENV_FILE:-}" && -r "${ENV_FILE}" ]]; then
-    gitaggregate -c "$ADDONS_YML" --expand-env --env-file "${ENV_FILE}"
-  else
-    gitaggregate -c "$ADDONS_YML" --expand-env
-  fi
+  gitaggregate -c "$ADDONS_YML" --expand-env
 )
 
 # -------------------- Copy real addons --------------------

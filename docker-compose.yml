@@ -10,14 +10,9 @@ services:
       args:
         ODOO_EDITION: ${ODOO_EDITION:-ce} # ce (Odoo Community Edition) or ee (Odoo Enterprise Edition)
 
-        # For Enterprise private repository authentication (default values are for Github)
-        ODOO_EE_GIT_USER: ${GITHUB_USER:-x-access-token}
-        ODOO_EE_GIT_HOST: ${GITHUB_HOST:-github.com}
-
-        # If you want to use your own git host for ee addons, you can change the values in .env file
-        # ODOO_EE_GIT_USER: ${GIT_USER:-x-access-token} # Git host personal access token user
-        # ODOO_EE_GIT_TOKEN: ${GIT_TOKEN:-} # Git host personal access token token
-        # ODOO_EE_GIT_HOST: ${GIT_HOST:-github.com} # Git host (e.g. github.com, gitlab.com, etc.)
+        # For Enterprise private repository authentication
+        ODOO_EE_GIT_USER: ${ODOO_EE_GIT_USER:-${GITHUB_USER:-x-access-token}}
+        ODOO_EE_GIT_HOST: ${ODOO_EE_GIT_HOST:-${GITHUB_HOST:-github.com}}
 
         # Optional Arguments (you can change default values if needed just uncomment and change the values in .env file)
         ODOO_CE_VERSION: ${ODOO_CE_VERSION:-${ODOO_VERSION:-18.0}} # CE series/tag used as a fallback
@@ -40,6 +35,19 @@ services:
       dockerfile: addons/Dockerfile
       args:
         BASE_IMAGE: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-18.0}
+        GIT_HOST: ${GIT_HOST:-}
+        GIT_USER: ${GIT_USER:-oauth2}
+        GITHUB_HOST: ${GITHUB_HOST:-github.com}
+        GITLAB_HOST: ${GITLAB_HOST:-gitlab.com}
+        GITHUB_USER: ${GITHUB_USER:-x-access-token}
+        GITLAB_USER: ${GITLAB_USER:-oauth2}
+      secrets:
+        - source: github_token
+          target: github_token
+        - source: gitlab_token
+          target: gitlab_token
+        - source: git_token
+          target: git_token
     environment:
       ODOO_ENV_FILE: "/run/odoo/.env"
       DB_HOST: ${DB_HOST}
@@ -72,7 +80,7 @@ services:
       - "8069"
       - "8072"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8069/web/login >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8069/web/health >/dev/null"]
       interval: 15s
       timeout: 5s
       retries: 12
@@ -179,4 +187,10 @@ networks:
 
 secrets:
   odoo_ee_git_token:
+    environment: ODOO_EE_GIT_TOKEN
+  github_token:
     environment: GITHUB_TOKEN
+  gitlab_token:
+    environment: GITLAB_TOKEN
+  git_token:
+    environment: GIT_TOKEN

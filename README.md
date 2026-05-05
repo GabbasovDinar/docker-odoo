@@ -79,6 +79,16 @@ Use another env file when needed:
 make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
 ```
 
+## Build Secrets for Private Repositories
+
+Addon and Enterprise build steps read Git tokens from Docker build secrets backed by host environment variables.
+Before running `make build-base`, `make build-addons`, or `make init`, provide Git tokens to Docker Compose (`ODOO_EE_GIT_TOKEN` for Enterprise build, plus `GITHUB_TOKEN`/`GITLAB_TOKEN`/`GIT_TOKEN` for extra addons as needed).
+You can keep them in your selected env file (for example `.env` / `ENV_FILE=...`) — manual `export` is optional and only needed if you do not use an env file.
+
+`ODOO_ENTERPRISE_REPO` can target non-GitHub hosts; set matching `ODOO_EE_GIT_HOST`/`ODOO_EE_GIT_USER`/`ODOO_EE_GIT_TOKEN` for private Enterprise clone authentication.
+
+In `docker-compose.yml` secrets declared with `environment:` must use the variable name (for example `environment: GITHUB_TOKEN`), not `${GITHUB_TOKEN}`.
+
 ## Local Use
 
 For local work, keep the production topology and use a local domain.
