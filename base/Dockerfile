@@ -23,12 +23,15 @@ ARG KWKHTMLTOPDF_CLIENT_REF=1.0
 # --- Enterprise variables
 ARG ODOO_EE_ADDONS_DIR=/opt/enterprise-addons
 ARG ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
-# To download Odoo EE from private repository using Github personal access token
+# Fallback build arg for manual builds. Prefer the BuildKit secret mount
+# "odoo_ee_git_token" configured in docker-compose.yml.
 ARG ODOO_EE_GIT_USER=x-access-token
 ARG ODOO_EE_GIT_TOKEN=
 ARG ODOO_EE_GIT_HOST=github.com
 # --- PostgreSQL variables
 ARG POSTGRES_VERSION=16
+# --- Target architecture
+ARG TARGETARCH
 
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
 ENV LANG=C.UTF-8
@@ -126,14 +129,18 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm -f /tmp/requiremen
 
 # Install Odoo EE
 ARG ODOO_ENTERPRISE_REF=${ODOO_EE_VERSION}
-RUN if [ "$ODOO_EDITION" = "ee" ]; then \
-    echo "Installing Odoo Enterprise..." && \
-    /extra-addons.sh \
-        --addons-file=/usr/local/share/odoo/manifests/enterprise.yml \
-        --addons-dir="${ODOO_EE_ADDONS_DIR}" \
-        --git-user="${ODOO_EE_GIT_USER}" \
-        --git-token="${ODOO_EE_GIT_TOKEN}" \
-        --git-host="${ODOO_EE_GIT_HOST}"; \
+RUN --mount=type=secret,id=odoo_ee_git_token,required=false \
+    if [ "$ODOO_EDITION" = "ee" ]; then \
+      if [ -f /run/secrets/odoo_ee_git_token ]; then \
+        ODOO_EE_GIT_TOKEN="$(cat /run/secrets/odoo_ee_git_token)"; \
+      fi; \
+      echo "Installing Odoo Enterprise..." && \
+      /extra-addons.sh \
+          --addons-file=/usr/local/share/odoo/manifests/enterprise.yml \
+          --addons-dir="${ODOO_EE_ADDONS_DIR}" \
+          --git-user="${ODOO_EE_GIT_USER}" \
+          --git-token="${ODOO_EE_GIT_TOKEN}" \
+          --git-host="${ODOO_EE_GIT_HOST}"; \
     fi
 
 # Expose filestore

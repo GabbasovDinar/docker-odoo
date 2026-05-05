@@ -89,3 +89,10 @@ docs/_build/
 
 # Environment variables
 .env
+.env.*
+!.env.example
+/.secrets/
+/.audit.rendered.odoo.conf
+*.dump
+*.tar.gz
+caddy-local-root.crt

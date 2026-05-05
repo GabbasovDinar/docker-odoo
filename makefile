@@ -1,4 +1,7 @@
-COMPOSE ?= docker compose -f docker-compose.yml
+ENV_FILE ?= .env
+COMPOSE_PROJECT_NAME ?= docker-odoo
+COMPOSE_FILES ?= -f docker-compose.yml
+
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
@@ -12,14 +15,30 @@ CADDY_SERVICE ?= caddy
 WKHTMLTOPDF_SERVICE ?= kwkhtmltopdf
 REDIS_SERVICE ?= redis
 
+COMPOSE = COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) ENV_FILE=$(ENV_FILE) docker compose --env-file $(ENV_FILE) $(COMPOSE_FILES)
+
 .PHONY: check-env
 check-env:
-	@test -f .env || { printf "Missing .env. Creating from .env.example\n"; cp .env.example .env; }
+	@if [ ! -f "$(ENV_FILE)" ]; then \
+		if [ "$(ENV_FILE)" = ".env" ]; then \
+			printf "Missing .env. Creating from .env.example\n"; \
+			cp .env.example .env; \
+		else \
+			printf "Missing env file: %s\n" "$(ENV_FILE)" >&2; \
+			exit 1; \
+		fi; \
+	fi
 
 .PHONY: help
 help: ## Show available targets
-	@printf "Usage: make <target>\n\n"
+	@printf "Usage: make <target> [ENV_FILE=.env] [COMPOSE_PROJECT_NAME=docker-odoo]\n\n"
 	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_.-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
+
+.PHONY: env
+env: ## Show the resolved make/compose environment
+	@printf "ENV_FILE=%s\n" "$(ENV_FILE)"
+	@printf "COMPOSE_PROJECT_NAME=%s\n" "$(COMPOSE_PROJECT_NAME)"
+	@printf "COMPOSE_FILES=%s\n" "$(COMPOSE_FILES)"
 
 .PHONY: build-base
 build-base: check-env ## Build the reusable Odoo base image
@@ -30,89 +49,101 @@ build-addons: check-env ## Build the project addons layer
 	$(COMPOSE) build $(ADDONS_SERVICE)
 
 .PHONY: init
-init: check-env build-base build-addons ## Fully prepare the stack: validate .env and build base + addons images
+init: check-env build-base build-addons ## Build the base and addons images
 
 .PHONY: build
 build: init
 
 .PHONY: rebuild-addons
-rebuild-addons: ## Rebuild the addons image without using cache
+rebuild-addons: check-env ## Rebuild the addons image without cache
 	$(COMPOSE) build --no-cache $(ADDONS_SERVICE)
 
 .PHONY: pull
-pull:
+pull: check-env ## Pull runtime images
 	$(COMPOSE) pull
 
-.PHONY: start
-start: check-env ## Start all runtime services in detached mode
+.PHONY: up
+up: check-env ## Start the stack
 	$(COMPOSE) up -d
 
-.PHONY: up
-up: start
+.PHONY: start
+start: up
 
 .PHONY: stop
-stop: ## Stop all running services without removing containers or volumes
+stop: check-env ## Stop the stack without removing containers
 	$(COMPOSE) stop
 
 .PHONY: restart
-restart: ## Restart all services
+restart: check-env ## Restart the stack
 	$(COMPOSE) restart
 
 .PHONY: down
-down: ## Stop services and remove containers
+down: check-env ## Stop and remove containers
 	$(COMPOSE) down --remove-orphans
 
 .PHONY: down-v
-down-v: ## Stop services and remove containers, networks and volumes
+down-v: check-env ## Stop and remove containers including volumes
 	$(COMPOSE) down -v --remove-orphans
 
 .PHONY: logs
-logs: ## Follow logs from all services
+logs: check-env ## Follow logs
 	$(COMPOSE) logs -f --tail=200
 
 .PHONY: log-odoo
-log-odoo: ## Follow Odoo logs
+log-odoo: check-env ## Follow Odoo logs
 	$(COMPOSE) logs -f --tail=200 $(ADDONS_SERVICE)
 
 .PHONY: log-db
-log-db: ## Follow PostgreSQL logs
+log-db: check-env ## Follow PostgreSQL logs
 	$(COMPOSE) logs -f --tail=200 $(DB_SERVICE)
 
-.PHONY: logs-db
-logs-db: log-db
+.PHONY: log-redis
+log-redis: check-env ## Follow Redis logs
+	$(COMPOSE) logs -f --tail=200 $(REDIS_SERVICE)
 
 .PHONY: log-caddy
-log-caddy: ## Follow Caddy logs
+log-caddy: check-env ## Follow Caddy logs
 	$(COMPOSE) logs -f --tail=200 $(CADDY_SERVICE)
 
 .PHONY: log-wkhtmltopdf
-log-wkhtmltopdf: ## Follow kwkhtmltopdf logs
+log-wkhtmltopdf: check-env ## Follow kwkhtmltopdf logs
 	$(COMPOSE) logs -f --tail=200 $(WKHTMLTOPDF_SERVICE)
 
-.PHONY: log-redis
-log-redis: ## Follow Redis logs
-	$(COMPOSE) logs -f --tail=200 $(REDIS_SERVICE)
-
 .PHONY: ps
-ps: ## Show service status
+ps: check-env ## Show service status
 	$(COMPOSE) ps
 
 .PHONY: sh
-sh: ## Shell into the Odoo container (reuse or run)
+sh: check-env ## Open a shell in the Odoo container
 	$(COMPOSE) exec $(ADDONS_SERVICE) bash || $(COMPOSE) run --rm $(ADDONS_SERVICE) bash
 
 .PHONY: odoo-shell
-odoo-shell: ## Open Odoo shell without starting HTTP
+odoo-shell: check-env ## Open odoo shell without starting HTTP
 	$(COMPOSE) exec $(ADDONS_SERVICE) odoo shell -c $${ODOO_RC:-/etc/odoo.conf} --no-http
 
 .PHONY: psql
-psql: ## Open psql session against PostgreSQL
+psql: check-env ## Open a psql session against PostgreSQL
 	$(COMPOSE) exec $(DB_SERVICE) psql -U $${DB_USER:-odoo} -d $${DB_NAME:-postgres} || $(COMPOSE) run --rm $(DB_SERVICE) psql -U $${DB_USER:-odoo} -d $${DB_NAME:-postgres}
 
 .PHONY: config
-config: ## Render the effective Compose configuration
+config: check-env ## Render the effective Compose configuration
 	$(COMPOSE) config
 
+.PHONY: backup
+backup: check-env ## Create a DB + filestore backup under backups/<timestamp>
+	COMPOSE_PROJECT_NAME="$(COMPOSE_PROJECT_NAME)" \
+	ENV_FILE="$(ENV_FILE)" \
+	COMPOSE_FILES="$(COMPOSE_FILES)" \
+	./scripts/backup.sh $(NAME)
+
+.PHONY: restore
+restore: check-env ## Restore DB + filestore from backups/<name> (pass BACKUP=backups/<name>)
+	@test -n "$(BACKUP)" || { printf "Usage: make restore BACKUP=backups/<name>\n" >&2; exit 2; }
+	COMPOSE_PROJECT_NAME="$(COMPOSE_PROJECT_NAME)" \
+	ENV_FILE="$(ENV_FILE)" \
+	COMPOSE_FILES="$(COMPOSE_FILES)" \
+	./scripts/restore.sh "$(BACKUP)"
+
 .PHONY: prune
-prune:
+prune: ## Prune the Docker build cache
 	docker builder prune -f

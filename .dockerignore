@@ -5,6 +5,14 @@
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
+.ruff_cache/
 .idea/
 .vscode/
 README.md~
+backups/
+local-addons/
+.secrets/
+*.dump
+*.tar.gz
+.DS_Store

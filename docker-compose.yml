@@ -4,12 +4,14 @@ services:
     build:
       context: .
       dockerfile: base/Dockerfile
+      secrets:
+        - source: odoo_ee_git_token
+          target: odoo_ee_git_token
       args:
         ODOO_EDITION: ${ODOO_EDITION:-ce} # ce (Odoo Community Edition) or ee (Odoo Enterprise Edition)
 
         # For Enterprise private repository authentication (default values are for Github)
         ODOO_EE_GIT_USER: ${GITHUB_USER:-x-access-token}
-        ODOO_EE_GIT_TOKEN: ${GITHUB_TOKEN:-}
         ODOO_EE_GIT_HOST: ${GITHUB_HOST:-github.com}
 
         # If you want to use your own git host for ee addons, you can change the values in .env file
@@ -61,18 +63,25 @@ services:
       KWKHTMLTOPDF_SERVER_URL: ${KWKHTMLTOPDF_SERVER_URL:-http://kwkhtmltopdf:8080}
     depends_on:
       db:
-        condition: service_started
+        condition: service_healthy
       kwkhtmltopdf:
         condition: service_started
       redis:
         condition: service_healthy
-    ports:
-      - "8069:8069"
+    expose:
+      - "8069"
+      - "8072"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8069/web/login >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     networks:
       - default
       - reports
     volumes:
-      - ./.env:/run/odoo/.env:ro # Environment variables file for generating Odoo config file and extra addons installation (for private repository authentication)
+      - ${ENV_FILE:-.env}:/run/odoo/.env:ro # Runtime env used to render /etc/odoo.conf.
       - odoo-data:/var/lib/odoo
       - ${LOCAL_ADDONS_DIR:-./local-addons}:/opt/local-addons
     restart: unless-stopped
@@ -127,7 +136,8 @@ services:
   caddy:
     image: caddy:2.8.4-alpine
     depends_on:
-      - odoo
+      odoo:
+        condition: service_healthy
     environment:
       - CADDY_DOMAIN=${CADDY_DOMAIN}
       - CADDY_EMAIL=${CADDY_EMAIL}
@@ -142,13 +152,19 @@ services:
     restart: unless-stopped
 
   db:
-    image: postgres:16-alpine
+    image: postgres:${POSTGRES_VERSION:-16}-alpine
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
@@ -160,3 +176,7 @@ volumes:
 
 networks:
   reports:
+
+secrets:
+  odoo_ee_git_token:
+    environment: GITHUB_TOKEN
