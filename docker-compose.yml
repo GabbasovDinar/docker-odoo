@@ -80,7 +80,7 @@ services:
       - "8069"
       - "8072"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8069/web/login >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8069/web/health >/dev/null"]
       interval: 15s
       timeout: 5s
       retries: 12

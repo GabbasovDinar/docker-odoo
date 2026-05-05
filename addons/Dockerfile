@@ -23,16 +23,26 @@ COPY addons/requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
 
 # --- Install Extra Addons
-RUN --mount=type=secret,id=github_token,target=/run/secrets/github_token,required=false \
-    --mount=type=secret,id=gitlab_token,target=/run/secrets/gitlab_token,required=false \
-    --mount=type=secret,id=git_token,target=/run/secrets/git_token,required=false \
-    GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
-    GITLAB_TOKEN="$(cat /run/secrets/gitlab_token 2>/dev/null || true)" \
-    GIT_TOKEN="$(cat /run/secrets/git_token 2>/dev/null || true)" \
-    mkdir -p ${EXTRA_ADDONS_DIR} && chown odoo ${EXTRA_ADDONS_DIR} \
+RUN --mount=type=secret,id=github_token,required=false \
+    --mount=type=secret,id=gitlab_token,required=false \
+    --mount=type=secret,id=git_token,required=false \
+    GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)"; \
+    GITLAB_TOKEN="$(cat /run/secrets/gitlab_token 2>/dev/null || true)"; \
+    GIT_TOKEN="$(cat /run/secrets/git_token 2>/dev/null || true)"; \
+    mkdir -p "${EXTRA_ADDONS_DIR}" \
+    && chown odoo:odoo "${EXTRA_ADDONS_DIR}" \
     && /extra-addons.sh \
         --addons-file=/usr/local/share/odoo/manifests/addons.yml \
-        --addons-dir=${EXTRA_ADDONS_DIR}
+        --addons-dir="${EXTRA_ADDONS_DIR}" \
+        --github-user="${GITHUB_USER}" \
+        --github-token="${GITHUB_TOKEN}" \
+        --github-host="${GITHUB_HOST}" \
+        --gitlab-user="${GITLAB_USER}" \
+        --gitlab-token="${GITLAB_TOKEN}" \
+        --gitlab-host="${GITLAB_HOST}" \
+        --git-user="${GIT_USER}" \
+        --git-token="${GIT_TOKEN}" \
+        --git-host="${GIT_HOST}"
 
 # Set default user when running the container
 USER odoo
