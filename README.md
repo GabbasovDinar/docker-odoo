@@ -1,311 +1,421 @@
 # docker-odoo
 
-Production-oriented Docker setup for Odoo 19 with PostgreSQL, Redis sessions,
-kwkhtmltopdf, Caddy reverse proxy, persistent volumes, and backup/restore
-scripts.
+`docker-odoo` is a Docker Compose project for building and running Odoo from source with custom addons. It uses a two-stage image build, PostgreSQL, Redis-backed sessions, internal `kwkhtmltopdf`, and Caddy as the public entrypoint. Odoo core is installed in the `base/` image, extra addon repositories are pulled during the `addons/` image build, local modules are mounted from `local-addons/`, and runtime configuration is generated from `.env` into `/etc/odoo.conf`.
 
-The stack has one default mode: production topology. Use `.env` by default.
-For local or staging copies, pass another env file explicitly.
+## Stack
 
-## Structure
+- Odoo
+- PostgreSQL
+- Docker / Docker Compose
+- Caddy reverse proxy
+- Redis for Odoo sessions
+- `kwkhtmltopdf` for report rendering
+- Remote addons from `addons/addons.yml`
+- Local custom addons from `local-addons/`
 
-```text
-.
-├── addons/
-│   ├── Dockerfile
-│   ├── addons.yml
-│   └── requirements.txt
-├── base/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   ├── config/odoo.conf.tpl
-│   ├── manifests/enterprise.yml
-│   └── scripts/
-├── caddy/
-│   └── Caddyfile
-├── local-addons/
-├── scripts/
-│   ├── backup.sh
-│   └── restore.sh
-├── docker-compose.yml
-├── .env.example
-├── .dockerignore
-├── .gitignore
-├── makefile
-└── README.md
-```
 
-## First Run
+## Minimum Requirements
 
-Create the env file:
+- Docker Engine with Compose v2
+- free host ports `80` and `443`
+- a hostname for `CADDY_DOMAIN` that resolves to the current machine or server
+- outbound network access during image build to GitHub, GitLab, apt, npm, and image registries
+- write access to `backups/`
+- read access to `local-addons/`
+
+Required env values before first real use:
+
+- `ADMIN_PASSWORD`
+- `DB_PASSWORD`
+- `REDIS_PASSWORD`
+- `CADDY_DOMAIN`
+- `CADDY_EMAIL`
+- `ODOO_BASE_URL`
+
+Optional but often needed:
+
+- `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GIT_TOKEN` for private addon repositories
+- `ODOO_EE_GIT_TOKEN` for Odoo Enterprise builds
+
+## Minimum Setup
+
+Copy the example env file:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` before starting:
+For a local run, the minimum useful values are:
 
-```dotenv
-DB_PASSWORD=<strong-random-secret>
-ADMIN_PASSWORD=<strong-random-secret>
-REDIS_PASSWORD=<strong-random-secret>
-CADDY_DOMAIN=odoo.example.com
-CADDY_EMAIL=admin@example.com
-ODOO_BASE_URL=https://odoo.example.com
-```
-
-The Makefile refuses to start with placeholder secrets or example domains.
-
-Build and start:
-
-```bash
-make init
-make config
-make up
-make ps
-make log-odoo
-```
-
-Default Makefile values:
-
-```bash
-ENV_FILE=.env
-COMPOSE_PROJECT_NAME=docker-odoo
-```
-
-Use another env file when needed:
-
-```bash
-make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
-```
-
-## Build Secrets for Private Repositories
-
-Addon and Enterprise build steps read Git tokens from Docker build secrets backed by host environment variables.
-Before running `make build-base`, `make build-addons`, or `make init`, provide Git tokens to Docker Compose (`ODOO_EE_GIT_TOKEN` for Enterprise build, plus `GITHUB_TOKEN`/`GITLAB_TOKEN`/`GIT_TOKEN` for extra addons as needed).
-You can keep them in your selected env file (for example `.env` / `ENV_FILE=...`) — manual `export` is optional and only needed if you do not use an env file.
-
-`ODOO_ENTERPRISE_REPO` can target non-GitHub hosts; set matching `ODOO_EE_GIT_HOST`/`ODOO_EE_GIT_USER`/`ODOO_EE_GIT_TOKEN` for private Enterprise clone authentication.
-
-In `docker-compose.yml` secrets declared with `environment:` must use the variable name (for example `environment: GITHUB_TOKEN`), not `${GITHUB_TOKEN}`.
-
-## Local Use
-
-For local work, keep the production topology and use a local domain.
-
-Example `.env.local` changes:
-
-```dotenv
-CADDY_DOMAIN=odoo.localhost
-CADDY_EMAIL=admin@example.com
-ODOO_BASE_URL=https://odoo.localhost
-DB_NAME=odoo_local
-DB_PASSWORD=<strong-random-secret>
-ADMIN_PASSWORD=<strong-random-secret>
-REDIS_PASSWORD=<strong-random-secret>
+```env
+ODOO_VERSION=18.0
+ODOO_EDITION=ce
+DATABASE_NAME=odoo
+DB_NAME=${DATABASE_NAME}
+DB_USER=odoo
+DB_PASSWORD=CHANGE_ME_STRONG_RANDOM_DB_PASSWORD
+ADMIN_PASSWORD=CHANGE_ME_STRONG_RANDOM_ADMIN_PASSWORD
+REDIS_PASSWORD=CHANGE_ME_STRONG_RANDOM_REDIS_PASSWORD
 WORKERS=2
-LOG_LEVEL=debug
-```
-
-Run:
-
-```bash
-make init ENV_FILE=.env.local COMPOSE_PROJECT_NAME=docker-odoo-local
-make up ENV_FILE=.env.local COMPOSE_PROJECT_NAME=docker-odoo-local
-```
-
-Caddy exposes Odoo on ports `80` and `443`. Odoo itself is not published on
-`8069`; it is only reachable inside the Docker network.
-
-## Staging
-
-Use a separate env file and project name:
-
-```bash
-cp .env.example .env.staging
-```
-
-Minimum staging changes:
-
-```dotenv
-DB_NAME=odoo_staging
-CADDY_DOMAIN=staging-odoo.example.com
-ODOO_BASE_URL=https://staging-odoo.example.com
-DBFILTER=^odoo_staging$
-LOG_LEVEL=info
-WORKERS=2
-```
-
-Run:
-
-```bash
-make init ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
-make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
-make logs ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
-```
-
-## Production Defaults
-
-`.env.example` already uses production-safe defaults for topology and Odoo
-runtime. Keep these values unless you know why you are changing them:
-
-```dotenv
 LIST_DB=False
-PROXY_MODE=True
 DBFILTER=^odoo$
-INIT=
-UPDATE=
-STOP_AFTER_INIT=
-TEST_ENABLE=
-LOG_LEVEL=info
-WORKERS=2
-MAX_CRON_THREADS=1
-LIMIT_MEMORY_SOFT=2147483648
-LIMIT_MEMORY_HARD=2684354560
-LIMIT_TIME_CPU=600
-LIMIT_TIME_REAL=1200
-LIMIT_TIME_REAL_CRON=2400
-LIMIT_REQUEST=8192
+CADDY_DOMAIN=localhost
+CADDY_EMAIL=admin@example.com
+ODOO_BASE_URL=https://localhost
+ODOO_REPORT_URL=http://odoo:8069
+LOAD=web,session_redis
 ```
 
-Deploy:
+Notes:
+
+- `CADDY_DOMAIN=localhost` is fine for local usage.
+- `ODOO_BASE_URL` should match the public URL you will actually open in the browser.
+- `ODOO_REPORT_URL` should stay internal as `http://odoo:8069` in this stack.
+- `LOAD=web,session_redis` is the current default because Redis session storage is part of this project.
+
+If you need raw Odoo config entries that are not explicitly exposed as separate env vars, use `ODOO_EXTRA_OPTS`. Its content is appended verbatim to the generated `odoo.conf`. This is useful for addons that require extra config blocks in `odoo.conf`, for example OCA `queue_job`.
+
+## First Launch
+
+Build images and start the stack:
 
 ```bash
 make init
-make config
 make up
 make ps
 ```
 
-## Commands
+Open Odoo in the browser:
+
+- local: `https://localhost`
+- server: `https://<CADDY_DOMAIN>`
+
+If the database does not exist yet:
+
+1. open `https://<CADDY_DOMAIN>/web/database/manager`
+2. create a database with the same name as `DB_NAME`
+3. use `ADMIN_PASSWORD` as the master password
+
+If you want raw Compose commands instead of `make`:
 
 ```bash
-make help
-make env
+docker compose --env-file .env --profile build build odoo-core
+docker compose --env-file .env build odoo
+docker compose --env-file .env up -d
+docker compose --env-file .env ps
+```
+
+## Main Commands
+
+For the normal workflow:
+
+- `make init` builds the reusable base image and then the project Odoo image with remote addons.
+- `make up` starts PostgreSQL, Redis, `kwkhtmltopdf`, Odoo, and Caddy in the background.
+- `make ps` shows whether the containers are up and healthy.
+- `make logs` tails logs from the full stack when you want to see startup or runtime errors.
+
+For day-to-day work:
+
+- `make restart` restarts services after changing `.env` or after updating local modules.
+- `make stop` stops containers but keeps them available for a later `make up`.
+- `make down` removes containers and networks but keeps named volumes and data.
+- `make sh` opens a shell inside the Odoo container.
+- `make odoo-shell` opens `odoo shell --no-http` inside the running Odoo container.
+- `make psql` opens a PostgreSQL shell against the configured database.
+
+For diagnostics:
+
+- `make log-odoo` follows only Odoo logs.
+- `make log-db` follows only PostgreSQL logs.
+- `make config` prints the final Compose configuration after env interpolation.
+
+For maintenance:
+
+- `make backup` creates a database and filestore backup under `backups/`.
+- `make restore BACKUP=backups/<name>` restores a previously created backup.
+
+Use a different env file or project name when needed:
+
+```bash
+make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
+```
+
+## Odoo CE / EE
+
+This project supports both Odoo Community Edition and Odoo Enterprise Edition.
+
+For Community Edition:
+
+```env
+ODOO_EDITION=ce
+ODOO_VERSION=18.0
+```
+
+For Enterprise Edition:
+
+```env
+ODOO_EDITION=ee
+ODOO_VERSION=18.0
+ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
+ODOO_EE_GIT_TOKEN=your_token
+ODOO_EE_GIT_USER=x-access-token
+ODOO_EE_GIT_HOST=github.com
+```
+
+Then rebuild the images:
+
+```bash
 make init
-make build-base
+make up
+```
+
+Notes:
+
+- `ODOO_EDITION=ee` enables the Enterprise build path in `base/Dockerfile`.
+- Enterprise addons are installed into `${ODOO_EE_ADDONS_DIR}`.
+- The runtime automatically appends `${ODOO_EE_ADDONS_DIR}` to `addons_path`.
+- If you want reproducible Enterprise builds, also set `ODOO_ENTERPRISE_REF`.
+- If your Enterprise repository is hosted outside GitHub, set matching `ODOO_EE_GIT_HOST`, `ODOO_EE_GIT_USER`, and `ODOO_EE_GIT_TOKEN`.
+
+## Working with Odoo Modules
+
+### Where modules come from
+
+- core Odoo addons: `/opt/odoo/addons`
+- remote addons baked into the image: `/opt/extra-addons`
+- local project addons: `/opt/local-addons`
+
+Default runtime `addons_path`:
+
+```text
+/opt/odoo/addons,/opt/extra-addons,/opt/local-addons
+```
+
+If `ODOO_EDITION=ee`, the runtime also appends `${ODOO_EE_ADDONS_DIR}` automatically.
+
+### Add a local custom module
+
+Put the module in `local-addons/`:
+
+```text
+local-addons/
+  my_module/
+    __init__.py
+    __manifest__.py
+    ...
+```
+
+Then restart Odoo:
+
+```bash
+make restart
+```
+
+If the module has Python dependencies, add them to `addons/requirements.txt` and rebuild the `odoo` image:
+
+```bash
 make build-addons
-make rebuild-addons
-make up
-make stop
-make restart
-make down
-make down-v
-make ps
-make logs
-make log-odoo
-make log-db
-make log-redis
-make log-caddy
-make sh
-make odoo-shell
-make psql
-```
-
-## Custom Addons
-
-Repository addons are baked into the image from:
-
-```text
-addons/addons.yml
-```
-
-Local addons are mounted from:
-
-```text
-local-addons/ -> /opt/local-addons
-```
-
-The default addons path is:
-
-```dotenv
-ADDONS_PATH=/opt/odoo/addons,/opt/extra-addons,/opt/local-addons
-```
-
-After changing `addons/addons.yml` or `addons/requirements.txt`:
-
-```bash
-make rebuild-addons
 make up
 ```
 
-After adding local modules:
+### Add a new remote addon repository
+
+Edit `addons/addons.yml` and add another repo entry in the same format already used there. This file is processed by `git-aggregator`, so if you need the full manifest format, merge syntax, or advanced options, use the upstream documentation: [git-aggregator](https://github.com/acsone/git-aggregator).
+
+Then rebuild the addons image:
+
+```bash
+make build-addons
+make up
+```
+
+### Install or update a module
+
+Update one module from CLI:
+
+```bash
+docker compose exec odoo bash -lc 'odoo -c /etc/odoo.conf -d "$DB_NAME" -u module_name --stop-after-init'
+```
+
+After that restart Odoo:
 
 ```bash
 make restart
 ```
 
-Update a module:
+## Advanced Settings
+
+This section contains the project internals and lower-level runtime details.
+
+### Config rendering
+
+- `.env` is mounted into the container as `/run/odoo/.env`
+- `/etc/odoo.conf` is rendered from `base/config/odoo.conf.tpl`
+- unresolved or empty config lines are dropped during rendering
+- `ODOO_EXTRA_OPTS` is appended at the end of the generated config
+
+That means you can inject extra Odoo config without modifying the template.
+
+### Ports
+
+- host ports:
+  - `80:80`
+  - `443:443`
+  - `443:443/udp`
+- internal-only services:
+  - Odoo HTTP: `8069`
+  - Odoo XML-RPCS: `8071`
+  - Odoo gevent/websocket: `8072`
+  - PostgreSQL: `5432`
+  - Redis: `6379`
+  - `kwkhtmltopdf`: `8080`
+
+### Volumes
+
+- `db-data` -> `/var/lib/postgresql/data`
+- `odoo-data` -> `/var/lib/odoo`
+- `redis-data` -> `/data`
+- `caddy-data` -> `/data`
+- `caddy-config` -> `/config`
+- `${LOCAL_ADDONS_DIR}` -> `/opt/local-addons`
+
+### Data locations
+
+- PostgreSQL data: `db-data`
+- Odoo filestore: `/var/lib/odoo/filestore/${DB_NAME}`
+- Redis persistence: `redis-data`
+- Caddy certificates and state: `caddy-data`, `caddy-config`
+
+### Addons build behavior
+
+- `addons/addons.yml` is processed by `git-aggregator`
+- module directories are copied into `/opt/extra-addons`
+- Python and Debian dependencies are resolved from addon metadata during build
+- `addons/requirements.txt` is installed into the image during the addons build stage
+
+### Redis sessions
+
+- default `LOAD` includes `session_redis`
+- Redis is private to Docker Compose and not published to the host
+- Odoo uses `REDIS_PASSWORD`
+- old filesystem sessions are cleaned up by the entrypoint when Redis session storage is enabled
+
+### Reverse proxy
+
+- public traffic goes to Caddy, not directly to Odoo
+- `caddy/Caddyfile` proxies:
+  - normal HTTP traffic to `odoo:8069`
+  - `/longpolling/*` and `/websocket` to `odoo:8072`
+- `PROXY_MODE=True` is expected for this topology
+
+### Local vs server use
+
+This repository does not have a separate dev compose file. Local, staging, and production separation is done through:
+
+- different `.env` files
+- different `COMPOSE_PROJECT_NAME`
+
+Examples:
 
 ```bash
-make sh
-odoo -c /etc/odoo.conf -u <module_name> -d "$DB_NAME" --stop-after-init
-make restart
+make up ENV_FILE=.env.local COMPOSE_PROJECT_NAME=docker-odoo-local
+make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
+make up ENV_FILE=.env.prod COMPOSE_PROJECT_NAME=docker-odoo-prod
 ```
 
-## Backup and Restore
+### Production / staging notes
 
-Create a timestamped backup:
+There is no `docker-compose.prod.yml` in this repository.
+
+What is already production-friendly in the current project:
+
+- PostgreSQL is not published to the host
+- Redis is not published to the host
+- Odoo is not published directly to the host
+- named volumes persist database, filestore, Redis, and Caddy state
+- reverse proxy handling is already configured
+
+What you still need to set correctly per environment:
+
+- `CADDY_DOMAIN`
+- `CADDY_EMAIL`
+- `ODOO_BASE_URL`
+- `ADMIN_PASSWORD`
+- `DB_PASSWORD`
+- `REDIS_PASSWORD`
+- `WORKERS`
+- `LIST_DB`
+- `DBFILTER`
+
+### Password rotation caveat
+
+Changing `DB_PASSWORD` for an already initialized PostgreSQL volume is not just an env change. The existing `db-data` volume keeps the original PostgreSQL credentials, so password rotation requires an intentional PostgreSQL-side change or volume re-creation.
+
+## Backup
+
+Use the built-in scripts:
 
 ```bash
 make backup
-```
-
-Create a named backup:
-
-```bash
 make backup NAME=before-upgrade
 ```
 
-Restore:
+Direct usage:
 
 ```bash
-make restore BACKUP=backups/before-upgrade
+./scripts/backup.sh
+./scripts/backup.sh before-upgrade
 ```
 
-For another env/project:
+The backup creates `backups/<timestamp-or-name>/` with:
+
+- `db.dump`
+- `filestore.tar.gz`
+- `manifest.txt`
+
+What is backed up:
+
+- PostgreSQL database `${DB_NAME}`
+- Odoo filestore from `${DATA_DIR}/filestore/${DB_NAME}`
+
+## Restore
+
+Restore overwrites the current database and filestore for `${DB_NAME}`.
+
+Restore a backup:
 
 ```bash
-make backup ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging NAME=before-upgrade
-make restore ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging BACKUP=backups/before-upgrade
+make restore BACKUP=backups/2026-05-05_12-00-00
 ```
 
-Backup includes:
-
-```text
-db.dump
-filestore.tar.gz
-manifest.txt
-```
-
-## Validation
+Direct usage:
 
 ```bash
-make config
-make init
-make up
-make ps
-make log-odoo
-make log-db
-make psql
-make sh
-bash -n scripts/backup.sh
-bash -n scripts/restore.sh
+./scripts/restore.sh backups/2026-05-05_12-00-00
 ```
 
-Inside the Odoo shell container:
+Restore flow:
 
-```bash
-odoo --version
-grep -E '^(addons_path|data_dir|db_host|db_port|db_user|proxy_mode|workers|list_db|dbfilter|server_wide_modules)' /etc/odoo.conf
-find /opt/local-addons -maxdepth 2 -name __manifest__.py
-find /opt/extra-addons -maxdepth 2 -name __manifest__.py | head
-ls -lah /var/lib/odoo
-```
+- stop `odoo`
+- restore `db.dump` into PostgreSQL
+- delete `${DATA_DIR}/filestore/${DB_NAME}`
+- extract `filestore.tar.gz`
+- start `odoo`
 
-## Notes
+## Security
 
-- `.env`, `.env.local`, and `.env.staging` are gitignored.
-- PostgreSQL and Redis are not published to the host.
-- Odoo is not published directly; Caddy is the public entrypoint.
-- Use separate `COMPOSE_PROJECT_NAME` values when running multiple stacks on one host.
+- do not commit `.env`
+- replace all `CHANGE_ME_*` values before real use
+- keep PostgreSQL private
+- keep Redis private
+- run public deployments behind Caddy or another reverse proxy
+- do not store backups in Git
+- keep `ADMIN_PASSWORD` strong
+
+## References
+
+* [Odoo 18 documentation](https://www.odoo.com/documentation/18.0/)
+* [git-aggregator](https://github.com/acsone/git-aggregator)
+* [Docker Compose CLI reference](https://docs.docker.com/engine/reference/commandline/compose/)
+* [Caddy documentation](https://caddyserver.com/docs/)
+* [kwkhtmltopdf](https://github.com/acsone/kwkhtmltopdf)
