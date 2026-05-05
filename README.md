@@ -48,7 +48,7 @@ cp .env.example .env
 For a local run, the minimum useful values are:
 
 ```env
-ODOO_VERSION=18.0
+ODOO_VERSION=19.0
 ODOO_EDITION=ce
 DATABASE_NAME=odoo
 DB_NAME=${DATABASE_NAME}
@@ -148,14 +148,14 @@ For Community Edition:
 
 ```env
 ODOO_EDITION=ce
-ODOO_VERSION=18.0
+ODOO_VERSION=19.0
 ```
 
 For Enterprise Edition:
 
 ```env
 ODOO_EDITION=ee
-ODOO_VERSION=18.0
+ODOO_VERSION=19.0
 ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
 ODOO_EE_GIT_TOKEN=your_token
 ODOO_EE_GIT_USER=x-access-token
@@ -414,7 +414,7 @@ Restore flow:
 
 ## References
 
-* [Odoo 18 documentation](https://www.odoo.com/documentation/18.0/)
+* [Odoo 19 documentation](https://www.odoo.com/documentation/19.0/)
 * [git-aggregator](https://github.com/acsone/git-aggregator)
 * [Docker Compose CLI reference](https://docs.docker.com/engine/reference/commandline/compose/)
 * [Caddy documentation](https://caddyserver.com/docs/)
