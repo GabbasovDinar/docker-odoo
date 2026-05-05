@@ -23,9 +23,12 @@ COPY addons/requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
 
 # --- Install Extra Addons
-RUN --mount=type=secret,id=github_token,env=GITHUB_TOKEN \
-    --mount=type=secret,id=gitlab_token,env=GITLAB_TOKEN \
-    --mount=type=secret,id=git_token,env=GIT_TOKEN \
+RUN --mount=type=secret,id=github_token,target=/run/secrets/github_token,required=false \
+    --mount=type=secret,id=gitlab_token,target=/run/secrets/gitlab_token,required=false \
+    --mount=type=secret,id=git_token,target=/run/secrets/git_token,required=false \
+    GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    GITLAB_TOKEN="$(cat /run/secrets/gitlab_token 2>/dev/null || true)" \
+    GIT_TOKEN="$(cat /run/secrets/git_token 2>/dev/null || true)" \
     mkdir -p ${EXTRA_ADDONS_DIR} && chown odoo ${EXTRA_ADDONS_DIR} \
     && /extra-addons.sh \
         --addons-file=/usr/local/share/odoo/manifests/addons.yml \
