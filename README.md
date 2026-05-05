@@ -1,6 +1,6 @@
 # docker-odoo
 
-Production-oriented Docker setup for Odoo 18 with PostgreSQL, Redis sessions,
+Production-oriented Docker setup for Odoo 19 with PostgreSQL, Redis sessions,
 kwkhtmltopdf, Caddy reverse proxy, persistent volumes, and backup/restore
 scripts.
 

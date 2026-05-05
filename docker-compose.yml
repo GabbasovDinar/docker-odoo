@@ -15,26 +15,26 @@ services:
         ODOO_EE_GIT_HOST: ${ODOO_EE_GIT_HOST:-${GITHUB_HOST:-github.com}}
 
         # Optional Arguments (you can change default values if needed just uncomment and change the values in .env file)
-        ODOO_CE_VERSION: ${ODOO_CE_VERSION:-${ODOO_VERSION:-18.0}} # CE series/tag used as a fallback
-        ODOO_CE_REF: ${ODOO_CE_REF:-${ODOO_CE_VERSION:-${ODOO_VERSION:-18.0}}} # CE branch/tag/commit to fetch
-        ODOO_EE_VERSION: ${ODOO_EE_VERSION:-${ODOO_VERSION:-18.0}} # EE series/tag used as a fallback
-        ODOO_ENTERPRISE_REF: ${ODOO_ENTERPRISE_REF:-${ODOO_EE_VERSION:-${ODOO_VERSION:-18.0}}} # EE branch/tag/commit to fetch
+        ODOO_CE_VERSION: ${ODOO_CE_VERSION:-${ODOO_VERSION:-19.0}} # CE series/tag used as a fallback
+        ODOO_CE_REF: ${ODOO_CE_REF:-${ODOO_CE_VERSION:-${ODOO_VERSION:-19.0}}} # CE branch/tag/commit to fetch
+        ODOO_EE_VERSION: ${ODOO_EE_VERSION:-${ODOO_VERSION:-19.0}} # EE series/tag used as a fallback
+        ODOO_ENTERPRISE_REF: ${ODOO_ENTERPRISE_REF:-${ODOO_EE_VERSION:-${ODOO_VERSION:-19.0}}} # EE branch/tag/commit to fetch
         ODOO_EE_ADDONS_DIR: ${ODOO_EE_ADDONS_DIR:-/opt/enterprise-addons} # EE addons directory
         ODOO_ENTERPRISE_REPO: ${ODOO_ENTERPRISE_REPO:-https://github.com/odoo/enterprise.git} # EE repository URL
         ODOO_LOG_DIR: ${ODOO_LOG_DIR:-/var/log/odoo} # Odoo log directory
         EXTRA_ADDONS_DIR: ${EXTRA_ADDONS_DIR:-/opt/extra-addons} # Extra addons directory
         KWKHTMLTOPDF_CLIENT_REF: ${KWKHTMLTOPDF_CLIENT_REF:-1.0} # kwkhtmltopdf client Git tag/commit
         POSTGRES_VERSION: ${POSTGRES_VERSION:-16} # PostgreSQL client version
-    image: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-18.0}
+    image: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-19.0}
     profiles: ["build"]
 
   odoo:
-    image: odoo-${ODOO_EDITION:-ce}:${ODOO_VERSION:-18.0}
+    image: odoo-${ODOO_EDITION:-ce}:${ODOO_VERSION:-19.0}
     build:
       context: .
       dockerfile: addons/Dockerfile
       args:
-        BASE_IMAGE: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-18.0}
+        BASE_IMAGE: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-19.0}
         GIT_HOST: ${GIT_HOST:-}
         GIT_USER: ${GIT_USER:-oauth2}
         GITHUB_HOST: ${GITHUB_HOST:-github.com}
