@@ -87,6 +87,8 @@ You can keep them in your selected env file (for example `.env` / `ENV_FILE=...`
 
 `ODOO_ENTERPRISE_REPO` can target non-GitHub hosts, but `ODOO_EE_GIT_HOST` must match the repository URL host for private clone authentication.
 
+In `docker-compose.yml` secrets declared with `environment:` must use the variable name (for example `environment: GITHUB_TOKEN`), not `${GITHUB_TOKEN}`.
+
 ## Local Use
 
 For local work, keep the production topology and use a local domain.
