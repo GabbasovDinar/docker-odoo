@@ -40,6 +40,19 @@ services:
       dockerfile: addons/Dockerfile
       args:
         BASE_IMAGE: odoo-core-${ODOO_EDITION:-ce}:${ODOO_VERSION:-18.0}
+        GIT_HOST: ${GIT_HOST:-}
+        GIT_USER: ${GIT_USER:-oauth2}
+        GITHUB_HOST: ${GITHUB_HOST:-github.com}
+        GITLAB_HOST: ${GITLAB_HOST:-gitlab.com}
+        GITHUB_USER: ${GITHUB_USER:-x-access-token}
+        GITLAB_USER: ${GITLAB_USER:-oauth2}
+      secrets:
+        - source: github_token
+          target: github_token
+        - source: gitlab_token
+          target: gitlab_token
+        - source: git_token
+          target: git_token
     environment:
       ODOO_ENV_FILE: "/run/odoo/.env"
       DB_HOST: ${DB_HOST}
@@ -180,3 +193,9 @@ networks:
 secrets:
   odoo_ee_git_token:
     environment: GITHUB_TOKEN
+  github_token:
+    environment: GITHUB_TOKEN
+  gitlab_token:
+    environment: GITLAB_TOKEN
+  git_token:
+    environment: GIT_TOKEN
