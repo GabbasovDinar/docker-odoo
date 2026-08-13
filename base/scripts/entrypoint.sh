@@ -30,6 +30,61 @@ elif [[ -n "${ENV_FILE:-}" && -r "${ENV_FILE}" ]]; then
   ENV_SRC="${ENV_FILE}"
 fi
 
+load_runtime_env() {
+  [[ -n "${ENV_SRC}" ]] || return 0
+
+  # Reuse the project dotenv parser and shell-quote values before eval.
+  # Only a fixed allow-list is exported; arbitrary .env keys are not sourced.
+  eval "$(python - "${ENV_SRC}" <<'PY'
+import importlib.util
+import shlex
+import sys
+
+spec = importlib.util.spec_from_file_location("odoorc", "/usr/local/bin/odoorc.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+env = module.parse_env(sys.argv[1], treat_empty_unset=True)
+
+keys = (
+    "ODOO_VERSION",
+    "OPENUPGRADE",
+    "OPENUPGRADE_DATABASE_NAME",
+    "OPENUPGRADE_TARGET_VERSION",
+    "OPENUPGRADE_FORCE",
+    "OPENUPGRADE_USE_DEMO",
+    "OPENUPGRADE_RENAMED_MODULES",
+    "OPENUPGRADE_MERGED_MODULES",
+)
+for key in keys:
+    if key in env:
+        print(f"export {key}={shlex.quote(env[key])}")
+PY
+)"
+}
+
+is_true() {
+  case "${1:-}" in
+    1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+load_runtime_env
+
+if is_true "${OPENUPGRADE:-False}"; then
+  if [[ -z "${OPENUPGRADE_DATABASE_NAME:-}" ]]; then
+    echo "ERROR: OPENUPGRADE=True requires OPENUPGRADE_DATABASE_NAME" >&2
+    exit 2
+  fi
+
+  export DB_NAME="${OPENUPGRADE_DATABASE_NAME}"
+  export DATABASE_NAME="${OPENUPGRADE_DATABASE_NAME}"
+fi
+
 # --- Render odoo.conf (drop-unresolved)
 render_args=(--template "${TEMPLATE_CONF}" --out "${ODOO_RC}" --max-passes 5 --drop-unresolved)
 if [[ -n "${ENV_SRC}" ]]; then
@@ -146,6 +201,59 @@ cleanup_filesystem_sessions_for_redis() {
   echo "Removed old filesystem sessions from ${session_dir}; Redis session storage is enabled"
 }
 
+database_odoo_version() {
+  local db_name="$1"
+
+  psql_odoo "${db_name}" -Atqc \
+    "SELECT COALESCE(latest_version, '') FROM ir_module_module WHERE name = 'base' LIMIT 1" \
+    2>/dev/null || true
+}
+
+run_openupgrade_if_enabled() {
+  is_true "${OPENUPGRADE:-False}" || return 0
+
+  local db_name="${OPENUPGRADE_DATABASE_NAME}"
+  local target_version="${OPENUPGRADE_TARGET_VERSION:-${ODOO_VERSION:-}}"
+  local current_version
+
+  if [[ -z "${target_version}" ]]; then
+    echo "ERROR: OPENUPGRADE_TARGET_VERSION or ODOO_VERSION must be set" >&2
+    exit 2
+  fi
+
+  current_version="$(database_odoo_version "${db_name}")"
+  if ! is_true "${OPENUPGRADE_FORCE:-False}" && [[ "${current_version}" == "${target_version}"* ]]; then
+    echo "OpenUpgrade: ${db_name} is already on ${current_version}; migration skipped"
+    return 0
+  fi
+
+  if [[ ! -d /opt/extra-addons/openupgrade_framework || ! -d /opt/extra-addons/openupgrade_scripts ]]; then
+    echo "ERROR: OpenUpgrade addons are missing from /opt/extra-addons" >&2
+    exit 2
+  fi
+
+  export OPENUPGRADE_TARGET_VERSION="${target_version}"
+
+  echo "OpenUpgrade: migrating database ${db_name} from ${current_version:-unknown} to ${target_version}"
+  odoo \
+    -c "${ODOO_RC}" \
+    -d "${db_name}" \
+    -u all \
+    --stop-after-init \
+    --no-http \
+    --workers=0 \
+    --max-cron-threads=0 \
+    --load=base,web,openupgrade_framework
+
+  current_version="$(database_odoo_version "${db_name}")"
+  if [[ "${current_version}" != "${target_version}"* ]]; then
+    echo "ERROR: OpenUpgrade finished but base reports version '${current_version}', expected '${target_version}*'" >&2
+    exit 1
+  fi
+
+  echo "OpenUpgrade: migration completed successfully; starting normal Odoo on ${db_name}"
+}
+
 # --- Command dispatcher
 if [[ $# -eq 0 ]]; then
   set -- odoo
@@ -155,12 +263,14 @@ case "$1" in
   odoo)
     shift || true
     cleanup_filesystem_sessions_for_redis
+    run_openupgrade_if_enabled
     start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   --)
     shift || true
     cleanup_filesystem_sessions_for_redis
+    run_openupgrade_if_enabled
     start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
