@@ -30,3 +30,13 @@
             ref: "18.0"
             depth: 1
     target: camptocamp-odoo-cloud-platform
+
+./oca-openupgrade:
+    remotes:
+        remote_1: https://github.com/OCA/OpenUpgrade.git
+    merges:
+        -
+            remote: remote_1
+            ref: "18.0"
+            depth: 1
+    target: oca-openupgrade
