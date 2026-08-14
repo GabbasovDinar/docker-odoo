@@ -95,7 +95,7 @@ services:
     restart: unless-stopped
 
   kwkhtmltopdf:
-    image: ${KWKHTMLTOPDF_IMAGE:-ghcr.io/acsone/kwkhtmltopdf:0.12.6.1-latest}
+    image: ${KWKHTMLTOPDF_IMAGE:-ghcr.io/acsone/kwkhtmltopdf/0.12.6.1:latest}
     platform: ${KWKHTMLTOPDF_PLATFORM:-linux/amd64}
     expose:
       - "8080"
