@@ -96,3 +96,6 @@ docs/_build/
 *.dump
 *.tar.gz
 caddy-local-root.crt
+
+# OpenUpgrade runtime log
+migration.log
