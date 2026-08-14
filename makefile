@@ -66,6 +66,12 @@ pull: check-env ## Pull runtime images
 up: check-env ## Start the stack
 	$(COMPOSE) up -d
 
+.PHONY: migrate
+migrate: check-env ## Run OpenUpgrade once in a disposable container
+	@printf "Stopping the normal Odoo service before migration...\n"
+	@$(COMPOSE) stop $(ADDONS_SERVICE) >/dev/null 2>&1 || true
+	$(COMPOSE) run --rm $(ADDONS_SERVICE) openupgrade
+
 .PHONY: start
 start: up
 

@@ -169,10 +169,6 @@ OPENUPGRADE_TARGET_DATABASE_NAME
               | OpenUpgrade -u all
               v
 migrated target database
-              |
-              | normal Odoo startup
-              v
-Odoo runs only on the target database
 ```
 
 Example for `16 -> 17`:
@@ -219,9 +215,36 @@ OPENUPGRADE_TARGET_VERSION=19.0
 
 A complete starting point is available in `openupgrade.env.example` on branches that support the migration workflow.
 
-### What happens on startup
+### Running a migration
 
-With `OPENUPGRADE=True` the entrypoint:
+Migration is intentionally separated from normal Odoo startup. Use the dedicated one-shot command:
+
+```bash
+make init
+make migrate
+```
+
+`make migrate` stops the normal `odoo` service if it is running and launches a disposable Compose container with the `openupgrade` entrypoint command. The container exits after the migration finishes, so a failed migration is not automatically restarted by the normal service restart policy.
+
+After a successful migration, start Odoo normally:
+
+```bash
+make up
+make log-odoo
+```
+
+The normal Odoo process is pinned to `OPENUPGRADE_TARGET_DATABASE_NAME` while `OPENUPGRADE=True` is present in the env file. If the target already contains the successful migration marker, the migration is skipped on normal startup and Odoo runs against the migrated target.
+
+You can use another env file for each hop:
+
+```bash
+make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
+make up ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
+```
+
+### What `make migrate` does
+
+With `OPENUPGRADE=True` the one-shot migration container:
 
 1. validates that source and target names are both set and different;
 2. verifies that the source PostgreSQL database exists;
@@ -231,17 +254,109 @@ With `OPENUPGRADE=True` the entrypoint:
 6. runs Odoo with `openupgrade_framework`, `-u all`, `--stop-after-init`, `--no-http`, and zero workers/cron threads;
 7. verifies that the target `base` module reports the current branch major version;
 8. stores a successful migration marker in `ir_config_parameter`;
-9. starts normal Odoo against the target database.
+9. exits successfully.
 
 The source database is only read by `pg_dump`; the new Odoo version is never started against it.
+
+### PostgreSQL on another VM
+
+The migration container does not require PostgreSQL to run on the same VM. Set `DB_HOST` and `DB_PORT` to the external PostgreSQL server:
+
+```env
+DB_HOST=10.20.0.15
+DB_PORT=5432
+DB_USER=odoo_migration
+DB_PASSWORD=CHANGE_ME_DB_PASSWORD
+
+OPENUPGRADE=True
+OPENUPGRADE_SOURCE_DATABASE_NAME=production16
+OPENUPGRADE_TARGET_DATABASE_NAME=migration17
+```
+
+Both source and target are currently expected to live on the same PostgreSQL endpoint configured by `DB_HOST` / `DB_PORT`:
+
+```text
+Migration VM                         PostgreSQL VM
+Docker / OpenUpgrade                10.20.0.15:5432
++----------------------+            +----------------------+
+| pg_dump / pg_restore |----------->| production16         |
+| Odoo target version  |            | migration17          |
++----------------------+            +----------------------+
+```
+
+The migration VM must be able to reach TCP port `5432` on the PostgreSQL VM. A simple connectivity check from the migration host is:
+
+```bash
+nc -zv 10.20.0.15 5432
+```
+
+On the PostgreSQL server, `listen_addresses` must allow the required interface and `pg_hba.conf` must allow the migration VM address. Prefer a specific address or subnet, for example:
+
+```conf
+host    all    odoo_migration    10.20.0.25/32    scram-sha-256
+```
+
+Do not expose PostgreSQL to `0.0.0.0/0` unless that is explicitly required and protected by the surrounding network/firewall policy.
+
+The role configured by `DB_USER` must be able to:
+
+- connect to and read the source database for `pg_dump`;
+- create a target database (`CREATEDB` or equivalent permission);
+- restore schema/data into the target;
+- drop the target when `OPENUPGRADE_RECREATE_DATABASE=True`.
+
+Example administrative preparation:
+
+```sql
+ALTER ROLE odoo_migration CREATEDB;
+```
+
+Grant only the additional source-database read permissions that are required by your PostgreSQL ownership/ACL model.
+
+The bundled Compose `db` service may still start as a dependency of `docker compose run`, but migration connections use `DB_HOST`. If `DB_HOST` points to another VM, the OpenUpgrade SQL traffic goes to that external PostgreSQL server.
+
+### External filestore / another Odoo VM
+
+PostgreSQL cloning does not clone the Odoo filestore. The filestore normally lives on the Odoo application host, not on the PostgreSQL VM.
+
+For example:
+
+```text
+Old Odoo VM                          Migration VM
+/var/lib/odoo/filestore/odoo16  ->  /var/lib/odoo/filestore/odoo16
+                                         |
+                                         +-> copied to filestore/odoo17
+```
+
+If the source filestore is on another VM, copy it to the migration host before `make migrate`, for example with `rsync`:
+
+```bash
+rsync -a \
+  odoo@old-odoo-vm:/var/lib/odoo/filestore/production16/ \
+  /path/to/migration-odoo-data/filestore/production16/
+```
+
+The source filestore must be visible inside the migration container as:
+
+```text
+${DATA_DIR}/filestore/${OPENUPGRADE_SOURCE_DATABASE_NAME}
+```
+
+With:
+
+```env
+OPENUPGRADE_COPY_FILESTORE=True
+```
+
+the entrypoint copies it to the target filestore directory before OpenUpgrade validation. If the source filestore is not visible, the migration continues with a warning, but attachments/documents/images cannot be fully validated until the filestore is provided.
 
 ### Existing target database safety
 
 The target database is not overwritten by default.
 
-If the target exists and contains a matching successful migration marker, the migration is skipped and normal Odoo starts on that target.
+If the target exists and contains a matching successful migration marker, the migration is skipped.
 
-If the target exists without that marker, startup stops with an error. This includes a database left by a failed/partial migration.
+If the target exists without that marker, migration stops with an error. This includes a database left by a failed/partial migration.
 
 To intentionally discard the target and rebuild it from source:
 
@@ -249,35 +364,15 @@ To intentionally discard the target and rebuild it from source:
 OPENUPGRADE_RECREATE_DATABASE=True
 ```
 
+Then rerun:
+
+```bash
+make migrate
+```
+
 This drops only `OPENUPGRADE_TARGET_DATABASE_NAME`, creates it again from the source, and retries the migration. Never use the same name for source and target.
 
 `OPENUPGRADE_FORCE=True` is intended only for an explicit re-run on an already completed target. Normally it should remain `False`; for a clean retry after a failed migration use `OPENUPGRADE_RECREATE_DATABASE=True` instead.
-
-### PostgreSQL permissions
-
-The PostgreSQL role configured by `DB_USER` must be able to:
-
-- connect to the source database;
-- read all data required by `pg_dump`;
-- create databases (`CREATEDB` or equivalent administrative permission);
-- create/restore schema objects in the target database;
-- drop the target database when `OPENUPGRADE_RECREATE_DATABASE=True`.
-
-The source and target databases are expected to be reachable through the same configured PostgreSQL endpoint (`DB_HOST` / `DB_PORT`). This works with an external PostgreSQL server; the bundled Compose PostgreSQL service is not required for the migration database itself.
-
-### Filestore
-
-PostgreSQL cloning does not clone the Odoo filestore.
-
-When `OPENUPGRADE_COPY_FILESTORE=True` (default for the migration example), the entrypoint copies:
-
-```text
-${DATA_DIR}/filestore/<source_database>
-    ->
-${DATA_DIR}/filestore/<target_database>
-```
-
-This works only when the source filestore is mounted into the container under the expected `DATA_DIR` path. If the database is on an external PostgreSQL server but the source filestore lives on another Odoo host, copy or mount that filestore before validating attachments/documents/images. If no source filestore is visible, the entrypoint logs a warning and continues with the database migration.
 
 ### Custom migration scripts
 
@@ -315,14 +410,47 @@ ORDER BY name;
 For each hop:
 
 1. checkout the target major-version branch;
-2. start from a verified source database of the previous major version;
-3. configure unique source and target database names;
-4. build the target image (`make init`);
-5. start the stack and follow `make log-odoo`;
-6. fix module/migration errors if needed;
-7. for a clean retry set `OPENUPGRADE_RECREATE_DATABASE=True` or use a new target name;
-8. after success restart normally and functionally validate the migrated Odoo instance;
-9. use that successful target as the source for the next major-version hop.
+2. copy `openupgrade.env.example` to a dedicated env file and fill in PostgreSQL credentials, source and target database names;
+3. if PostgreSQL is on another VM, verify `DB_HOST`, firewall, `pg_hba.conf`, credentials and `CREATEDB` permission;
+4. if the filestore is on another VM, copy or mount the source filestore into the migration host/container;
+5. build the target image with `make init ENV_FILE=<migration-env>`;
+6. run the one-shot migration with `make migrate ENV_FILE=<migration-env>`;
+7. if migration fails, inspect the error; for a clean retry set `OPENUPGRADE_RECREATE_DATABASE=True` and rerun `make migrate`;
+8. after success run `make up ENV_FILE=<migration-env>` and functionally validate the migrated Odoo instance;
+9. use that successful target database as the source for the next major-version hop.
+
+Example `16 -> 17`:
+
+```bash
+git switch 17.0
+cp openupgrade.env.example .env.migrate-17
+# edit .env.migrate-17
+make init ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
+make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
+make up ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
+```
+
+Example `17 -> 18`:
+
+```bash
+git switch agent/openupgrade-18
+cp openupgrade.env.example .env.migrate-18
+# edit .env.migrate-18: source=odoo17, target=odoo18
+make init ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
+make migrate ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
+make up ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
+```
+
+Example `18 -> 19`:
+
+```bash
+git switch agent/openupgrade-19
+cp openupgrade.env.example .env.migrate-19
+# edit .env.migrate-19: source=odoo18, target=odoo19
+make init ENV_FILE=.env.migrate-19 COMPOSE_PROJECT_NAME=odoo-migrate-19
+make migrate ENV_FILE=.env.migrate-19 COMPOSE_PROJECT_NAME=odoo-migrate-19
+make up ENV_FILE=.env.migrate-19 COMPOSE_PROJECT_NAME=odoo-migrate-19
+```
 
 Do not continue to the next major version from a database whose current hop has not been validated.
 

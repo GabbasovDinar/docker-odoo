@@ -431,7 +431,7 @@ run_openupgrade_if_enabled() {
   fi
 
   mark_openupgrade_success "${target_db}" "${source_db}" "${hop_version}"
-  echo "OpenUpgrade: migration ${source_db} -> ${target_db} completed successfully; starting normal Odoo on ${target_db}"
+  echo "OpenUpgrade: migration ${source_db} -> ${target_db} completed successfully"
 }
 
 # --- Command dispatcher
@@ -440,6 +440,15 @@ if [[ $# -eq 0 ]]; then
 fi
 
 case "$1" in
+  openupgrade)
+    shift || true
+    if ! is_true "${OPENUPGRADE:-False}"; then
+      echo "ERROR: make migrate/openupgrade requires OPENUPGRADE=True" >&2
+      exit 2
+    fi
+    cleanup_filesystem_sessions_for_redis
+    run_openupgrade_if_enabled
+    ;;
   odoo)
     shift || true
     cleanup_filesystem_sessions_for_redis
