@@ -30,6 +30,83 @@ elif [[ -n "${ENV_FILE:-}" && -r "${ENV_FILE}" ]]; then
   ENV_SRC="${ENV_FILE}"
 fi
 
+load_runtime_env() {
+  [[ -n "${ENV_SRC}" ]] || return 0
+
+  # Reuse the project dotenv parser and shell-quote values before eval.
+  # Only a fixed allow-list is exported; arbitrary .env keys are not sourced.
+  eval "$(python - "${ENV_SRC}" <<'PY'
+import importlib.util
+import shlex
+import sys
+
+spec = importlib.util.spec_from_file_location("odoorc", "/usr/local/bin/odoorc.py")
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+env = module.parse_env(sys.argv[1], treat_empty_unset=True)
+
+keys = (
+    "ODOO_VERSION",
+    "OPENUPGRADE",
+    "OPENUPGRADE_SOURCE_DATABASE_NAME",
+    "OPENUPGRADE_TARGET_DATABASE_NAME",
+    "OPENUPGRADE_DATABASE_NAME",
+    "OPENUPGRADE_TARGET_VERSION",
+    "OPENUPGRADE_FORCE",
+    "OPENUPGRADE_RECREATE_DATABASE",
+    "OPENUPGRADE_COPY_FILESTORE",
+    "OPENUPGRADE_USE_DEMO",
+    "OPENUPGRADE_RENAMED_MODULES",
+    "OPENUPGRADE_MERGED_MODULES",
+)
+for key in keys:
+    if key in env:
+        print(f"export {key}={shlex.quote(env[key])}")
+PY
+)"
+}
+
+is_true() {
+  case "${1:-}" in
+    1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+load_runtime_env
+
+if is_true "${OPENUPGRADE:-False}"; then
+  OPENUPGRADE_TARGET_DATABASE_NAME="${OPENUPGRADE_TARGET_DATABASE_NAME:-${OPENUPGRADE_DATABASE_NAME:-}}"
+
+  if [[ -z "${OPENUPGRADE_SOURCE_DATABASE_NAME:-}" ]]; then
+    echo "ERROR: OPENUPGRADE=True requires OPENUPGRADE_SOURCE_DATABASE_NAME" >&2
+    exit 2
+  fi
+  if [[ -z "${OPENUPGRADE_TARGET_DATABASE_NAME:-}" ]]; then
+    echo "ERROR: OPENUPGRADE=True requires OPENUPGRADE_TARGET_DATABASE_NAME" >&2
+    exit 2
+  fi
+  if [[ "${OPENUPGRADE_SOURCE_DATABASE_NAME}" == "${OPENUPGRADE_TARGET_DATABASE_NAME}" ]]; then
+    echo "ERROR: source and target databases must be different" >&2
+    exit 2
+  fi
+
+  export OPENUPGRADE_SOURCE_DATABASE_NAME
+  export OPENUPGRADE_TARGET_DATABASE_NAME
+  export DB_NAME="${OPENUPGRADE_TARGET_DATABASE_NAME}"
+  export DATABASE_NAME="${OPENUPGRADE_TARGET_DATABASE_NAME}"
+  export DBFILTER="$(python - "${OPENUPGRADE_TARGET_DATABASE_NAME}" <<'PY'
+import re
+import sys
+print(f"^{re.escape(sys.argv[1])}$")
+PY
+)"
+fi
+
 # --- Render odoo.conf (drop-unresolved)
 render_args=(--template "${TEMPLATE_CONF}" --out "${ODOO_RC}" --max-passes 5 --drop-unresolved)
 if [[ -n "${ENV_SRC}" ]]; then
@@ -146,6 +223,217 @@ cleanup_filesystem_sessions_for_redis() {
   echo "Removed old filesystem sessions from ${session_dir}; Redis session storage is enabled"
 }
 
+database_exists() {
+  local db_name="$1"
+  local result
+
+  result="$(psql_odoo postgres -At -v db_name="${db_name}" <<'SQL'
+SELECT 1 FROM pg_database WHERE datname = :'db_name';
+SQL
+)"
+  [[ "${result}" == "1" ]]
+}
+
+database_odoo_version() {
+  local db_name="$1"
+
+  psql_odoo "${db_name}" -Atqc \
+    "SELECT COALESCE(latest_version, '') FROM ir_module_module WHERE name = 'base' LIMIT 1" \
+    2>/dev/null || true
+}
+
+openupgrade_marker_matches() {
+  local db_name="$1"
+  local source_db="$2"
+  local hop_version="$3"
+  local table_exists
+  local matches
+
+  table_exists="$(psql_odoo "${db_name}" -Atqc "SELECT to_regclass('public.ir_config_parameter') IS NOT NULL" 2>/dev/null || true)"
+  [[ "${table_exists}" == "t" ]] || return 1
+
+  matches="$(psql_odoo "${db_name}" -At \
+    -v source_db="${source_db}" \
+    -v hop_version="${hop_version}" <<'SQL'
+SELECT CASE WHEN
+    EXISTS (
+        SELECT 1 FROM ir_config_parameter
+        WHERE key = 'docker_odoo.openupgrade.source_database'
+          AND value = :'source_db'
+    )
+    AND EXISTS (
+        SELECT 1 FROM ir_config_parameter
+        WHERE key = 'docker_odoo.openupgrade.hop_version'
+          AND value = :'hop_version'
+    )
+    AND EXISTS (
+        SELECT 1 FROM ir_config_parameter
+        WHERE key = 'docker_odoo.openupgrade.status'
+          AND value = 'completed'
+    )
+THEN 1 ELSE 0 END;
+SQL
+)"
+
+  [[ "${matches}" == "1" ]]
+}
+
+mark_openupgrade_success() {
+  local db_name="$1"
+  local source_db="$2"
+  local hop_version="$3"
+
+  sync_odoo_config_parameter "${db_name}" "docker_odoo.openupgrade.source_database" "${source_db}"
+  sync_odoo_config_parameter "${db_name}" "docker_odoo.openupgrade.hop_version" "${hop_version}"
+  sync_odoo_config_parameter "${db_name}" "docker_odoo.openupgrade.status" "completed"
+  sync_odoo_config_parameter "${db_name}" "docker_odoo.openupgrade.completed_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+}
+
+copy_openupgrade_filestore() {
+  local source_db="$1"
+  local target_db="$2"
+  local data_dir="${DATA_DIR:-/var/lib/odoo}"
+  local source_dir="${data_dir}/filestore/${source_db}"
+  local target_dir="${data_dir}/filestore/${target_db}"
+
+  is_true "${OPENUPGRADE_COPY_FILESTORE:-True}" || return 0
+
+  if [[ ! -d "${source_dir}" ]]; then
+    echo "OpenUpgrade: source filestore not found at ${source_dir}; copy it separately if the database uses attachments" >&2
+    return 0
+  fi
+
+  mkdir -p "${target_dir}"
+  rsync -a --delete "${source_dir}/" "${target_dir}/"
+  echo "OpenUpgrade: copied filestore ${source_db} -> ${target_db}"
+}
+
+clone_openupgrade_database() {
+  local source_db="$1"
+  local target_db="$2"
+  local command_name
+
+  for command_name in pg_dump pg_restore createdb dropdb; do
+    if ! command -v "${command_name}" >/dev/null 2>&1; then
+      echo "ERROR: ${command_name} is required for OpenUpgrade database cloning" >&2
+      return 1
+    fi
+  done
+
+  if database_exists "${target_db}"; then
+    echo "OpenUpgrade: dropping target database ${target_db} before recreation"
+    PGPASSWORD="${DB_PASSWORD}" dropdb \
+      -h "${DB_HOST}" \
+      -p "${DB_PORT}" \
+      -U "${DB_USER}" \
+      --maintenance-db=postgres \
+      --if-exists \
+      --force \
+      "${target_db}"
+  fi
+
+  echo "OpenUpgrade: creating empty target database ${target_db}"
+  PGPASSWORD="${DB_PASSWORD}" createdb \
+    -h "${DB_HOST}" \
+    -p "${DB_PORT}" \
+    -U "${DB_USER}" \
+    --maintenance-db=postgres \
+    --owner="${DB_USER}" \
+    --template=template0 \
+    "${target_db}"
+
+  echo "OpenUpgrade: cloning PostgreSQL database ${source_db} -> ${target_db}"
+  if ! PGPASSWORD="${DB_PASSWORD}" pg_dump \
+      -h "${DB_HOST}" \
+      -p "${DB_PORT}" \
+      -U "${DB_USER}" \
+      --format=custom \
+      --no-owner \
+      --no-privileges \
+      "${source_db}" \
+      | PGPASSWORD="${DB_PASSWORD}" pg_restore \
+          -h "${DB_HOST}" \
+          -p "${DB_PORT}" \
+          -U "${DB_USER}" \
+          -d "${target_db}" \
+          --no-owner \
+          --no-privileges \
+          --exit-on-error; then
+    echo "ERROR: failed to clone ${source_db} into ${target_db}; target database was left in place for inspection" >&2
+    return 1
+  fi
+
+  copy_openupgrade_filestore "${source_db}" "${target_db}"
+}
+
+run_openupgrade_if_enabled() {
+  is_true "${OPENUPGRADE:-False}" || return 0
+
+  local source_db="${OPENUPGRADE_SOURCE_DATABASE_NAME}"
+  local target_db="${OPENUPGRADE_TARGET_DATABASE_NAME}"
+  local hop_version="${ODOO_VERSION:-}"
+  local final_target_version="${OPENUPGRADE_TARGET_VERSION:-${hop_version}}"
+  local current_version
+
+  if [[ -z "${hop_version}" ]]; then
+    echo "ERROR: ODOO_VERSION must be set when OPENUPGRADE=True" >&2
+    exit 2
+  fi
+
+  if [[ ! -d /opt/extra-addons/openupgrade_framework || ! -d /opt/extra-addons/openupgrade_scripts ]]; then
+    echo "ERROR: OpenUpgrade addons are missing from /opt/extra-addons" >&2
+    exit 2
+  fi
+
+  if ! database_exists "${source_db}"; then
+    echo "ERROR: OpenUpgrade source database ${source_db} does not exist" >&2
+    exit 2
+  fi
+
+  if database_exists "${target_db}"; then
+    if openupgrade_marker_matches "${target_db}" "${source_db}" "${hop_version}" && ! is_true "${OPENUPGRADE_FORCE:-False}"; then
+      current_version="$(database_odoo_version "${target_db}")"
+      echo "OpenUpgrade: ${target_db} already completed ${source_db} -> ${hop_version} (${current_version:-unknown}); migration skipped"
+      return 0
+    fi
+
+    if is_true "${OPENUPGRADE_RECREATE_DATABASE:-False}"; then
+      clone_openupgrade_database "${source_db}" "${target_db}"
+    elif openupgrade_marker_matches "${target_db}" "${source_db}" "${hop_version}" && is_true "${OPENUPGRADE_FORCE:-False}"; then
+      echo "OpenUpgrade: force enabled; re-running migration on existing completed target ${target_db}" >&2
+    else
+      echo "ERROR: target database ${target_db} already exists without a matching successful migration marker" >&2
+      echo "Set OPENUPGRADE_RECREATE_DATABASE=True to recreate it from ${source_db}, or choose another target database name" >&2
+      exit 2
+    fi
+  else
+    clone_openupgrade_database "${source_db}" "${target_db}"
+  fi
+
+  current_version="$(database_odoo_version "${target_db}")"
+  export OPENUPGRADE_TARGET_VERSION="${final_target_version}"
+
+  echo "OpenUpgrade: migrating copied database ${target_db} from ${current_version:-unknown} to ${hop_version}; final target=${final_target_version}"
+  odoo \
+    -c "${ODOO_RC}" \
+    -d "${target_db}" \
+    -u all \
+    --stop-after-init \
+    --no-http \
+    --workers=0 \
+    --max-cron-threads=0 \
+    --load=base,web,openupgrade_framework
+
+  current_version="$(database_odoo_version "${target_db}")"
+  if [[ "${current_version}" != "${hop_version}"* ]]; then
+    echo "ERROR: OpenUpgrade finished but base reports version '${current_version}', expected '${hop_version}*'" >&2
+    exit 1
+  fi
+
+  mark_openupgrade_success "${target_db}" "${source_db}" "${hop_version}"
+  echo "OpenUpgrade: migration ${source_db} -> ${target_db} completed successfully; starting normal Odoo on ${target_db}"
+}
+
 # --- Command dispatcher
 if [[ $# -eq 0 ]]; then
   set -- odoo
@@ -155,12 +443,14 @@ case "$1" in
   odoo)
     shift || true
     cleanup_filesystem_sessions_for_redis
+    run_openupgrade_if_enabled
     start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   --)
     shift || true
     cleanup_filesystem_sessions_for_redis
+    run_openupgrade_if_enabled
     start_odoo_url_parameter_sync
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
