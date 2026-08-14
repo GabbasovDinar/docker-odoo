@@ -752,6 +752,198 @@ Public traffic goes to Caddy, not directly to Odoo.
 
 `PROXY_MODE=True` is expected for this topology.
 
+### Nginx with a Custom TLS Certificate
+
+If TLS termination is already managed by an external Nginx instance and you want to use your own certificate instead of the bundled Caddy service, keep Odoo behind the reverse proxy and let Nginx expose only ports `80` and `443` to clients.
+
+Recommended topology when Nginx runs directly on the Docker host:
+
+```text
+Internet
+   |
+   | HTTPS :443
+   v
+Nginx on host
+   |
+   +---- 127.0.0.1:8069 ----> Odoo HTTP
+   |
+   +---- 127.0.0.1:8072 ----> Odoo websocket/gevent
+
+Docker private network:
+Odoo <----> PostgreSQL
+Odoo <----> Redis
+Odoo <----> kwkhtmltopdf
+```
+
+#### Disable the bundled Caddy service
+
+The default Compose configuration starts Caddy and publishes host ports `80` and `443`. If host-level Nginx already owns those ports, Caddy must not be started.
+
+For a dedicated Nginx deployment, remove or override the `caddy` service from `docker-compose.yml`. The Caddy-only volumes can also be removed when they are no longer used:
+
+```yaml
+volumes:
+  # caddy-data:    # remove when Caddy is not used
+  # caddy-config:  # remove when Caddy is not used
+```
+
+The following variables are Caddy-specific and are not required by Nginx:
+
+```env
+CADDY_DOMAIN=
+CADDY_EMAIL=
+```
+
+Do not run Caddy and host-level Nginx on the same host ports unless you intentionally place one proxy behind the other.
+
+#### Publish Odoo only on localhost
+
+The current Compose configuration uses `expose` because Caddy reaches Odoo through the Docker network. A host-level Nginx cannot use Docker service names directly, so publish the Odoo HTTP and realtime ports only on loopback:
+
+```yaml
+odoo:
+  expose:
+    - "8069"
+    - "8072"
+  ports:
+    - "127.0.0.1:8069:8069"
+    - "127.0.0.1:8072:8072"
+```
+
+Use `127.0.0.1`, not `0.0.0.0`, so clients cannot bypass Nginx and connect directly to Odoo.
+
+Do not publish PostgreSQL, Redis, or `kwkhtmltopdf` for this setup. They should stay on private Docker networks.
+
+#### Odoo environment settings
+
+Use the public HTTPS address for `web.base.url`, but keep report rendering and `kwkhtmltopdf` traffic internal:
+
+```env
+ODOO_BASE_URL=https://odoo.example.com
+ODOO_BASE_URL_FREEZE=True
+PROXY_MODE=True
+
+ODOO_REPORT_URL=http://odoo:8069
+KWKHTMLTOPDF_SERVER_URL=http://kwkhtmltopdf:8080
+```
+
+Important distinctions:
+
+- `ODOO_BASE_URL` is the public URL opened by users and therefore uses HTTPS.
+- `ODOO_REPORT_URL` is an internal Docker URL used when reports need to load Odoo resources; it does not need to pass through Nginx or TLS.
+- `KWKHTMLTOPDF_SERVER_URL` is also internal Docker traffic and should normally remain `http://kwkhtmltopdf:8080`.
+- `PROXY_MODE=True` must remain enabled so Odoo correctly interprets `X-Forwarded-*` headers from Nginx.
+
+#### Example Nginx configuration
+
+The following example assumes:
+
+```text
+Domain:      odoo.example.com
+Certificate: /etc/nginx/ssl/odoo.crt
+Private key: /etc/nginx/ssl/odoo.key
+```
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream odoo {
+    server 127.0.0.1:8069;
+}
+
+upstream odoo_realtime {
+    server 127.0.0.1:8072;
+}
+
+server {
+    listen 80;
+    server_name odoo.example.com;
+
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+
+    server_name odoo.example.com;
+
+    ssl_certificate     /etc/nginx/ssl/odoo.crt;
+    ssl_certificate_key /etc/nginx/ssl/odoo.key;
+
+    client_max_body_size 200m;
+
+    proxy_connect_timeout 60s;
+    proxy_read_timeout 720s;
+    proxy_send_timeout 720s;
+
+    location /websocket {
+        proxy_pass http://odoo_realtime;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /longpolling/ {
+        proxy_pass http://odoo_realtime;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location / {
+        proxy_pass http://odoo;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+Replace the domain and certificate paths with the values used by your deployment.
+
+Validate and reload Nginx after changing the configuration:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Then verify public access:
+
+```bash
+curl -I https://odoo.example.com
+```
+
+#### If Nginx runs in Docker
+
+If Nginx is another Docker service instead of a host service, do not publish `8069` or `8072` to the host. Connect the Nginx container to the same Docker network as Odoo and proxy directly to:
+
+```text
+http://odoo:8069
+http://odoo:8072
+```
+
+In that topology the Odoo service can continue to use only `expose`, exactly like the bundled Caddy setup.
+
+The TLS certificate and private key should be mounted read-only into the Nginx container. PostgreSQL, Redis, and `kwkhtmltopdf` should remain private and must not be routed through Nginx.
+
 ### Local, Staging, and Production Environments
 
 The repository does not require separate Compose files for each environment. Separation can be done with different env files and Compose project names:
