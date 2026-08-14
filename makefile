@@ -67,10 +67,14 @@ up: check-env ## Start the stack
 	$(COMPOSE) up -d
 
 .PHONY: migrate
-migrate: check-env ## Run OpenUpgrade once in a disposable container
-	@printf "Stopping the normal Odoo service before migration...\n"
-	@$(COMPOSE) stop $(ADDONS_SERVICE) >/dev/null 2>&1 || true
-	$(COMPOSE) run --rm $(ADDONS_SERVICE) openupgrade
+migrate: check-env ## Run OpenUpgrade once and overwrite migration.log
+	@rm -f migration.log
+	@set -o pipefail; { \
+		printf "Stopping the normal Odoo service before migration...\n"; \
+		$(COMPOSE) stop $(ADDONS_SERVICE) || true; \
+		printf "Starting OpenUpgrade migration...\n"; \
+		$(COMPOSE) run --rm $(ADDONS_SERVICE) openupgrade; \
+	} 2>&1 | tee migration.log
 
 .PHONY: start
 start: up
