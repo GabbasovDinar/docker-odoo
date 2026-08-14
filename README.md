@@ -1,51 +1,37 @@
 # docker-odoo
 
-`docker-odoo` is a Docker Compose project for building and running Odoo from source with custom addons. It uses a two-stage image build, PostgreSQL, Redis-backed sessions, internal `kwkhtmltopdf`, and Caddy as the public entrypoint. Odoo core is installed in the `base/` image, extra addon repositories are pulled during the `addons/` image build, local modules are mounted from `local-addons/`, and runtime configuration is generated from `.env` into `/etc/odoo.conf`.
+`docker-odoo` is a Docker Compose project for building and running Odoo from source with custom addons. Each major Odoo version lives in its corresponding repository branch (`17.0`, `18.0`, `19.0`, ...).
 
-## Stack
+The stack includes Odoo, PostgreSQL, Redis-backed sessions, `kwkhtmltopdf`, Caddy, remote addons from `addons/addons.yml`, and local custom addons from `local-addons/`.
 
-- Odoo
-- PostgreSQL
-- Docker / Docker Compose
-- Caddy reverse proxy
-- Redis for Odoo sessions
-- `kwkhtmltopdf` for report rendering
-- Remote addons from `addons/addons.yml`
-- Local custom addons from `local-addons/`
-
-
-## Minimum Requirements
+## Requirements
 
 - Docker Engine with Compose v2
 - free host ports `80` and `443`
-- a hostname for `CADDY_DOMAIN` that resolves to the current machine or server
-- outbound network access during image build to GitHub, GitLab, apt, npm, and image registries
-- write access to `backups/`
+- outbound access during image build to GitHub/GitLab/package repositories
 - read access to `local-addons/`
+- write access to `backups/`
 
-Required env values before first real use:
+Required environment values for a normal deployment:
 
+- `ODOO_VERSION`
 - `ADMIN_PASSWORD`
+- `DB_USER`
 - `DB_PASSWORD`
 - `REDIS_PASSWORD`
 - `CADDY_DOMAIN`
 - `CADDY_EMAIL`
 - `ODOO_BASE_URL`
 
-Optional but often needed:
+Optional credentials such as `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GIT_TOKEN`, and `ODOO_EE_GIT_TOKEN` are required only when the corresponding private repositories are used.
 
-- `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GIT_TOKEN` for private addon repositories
-- `ODOO_EE_GIT_TOKEN` for Odoo Enterprise builds
-
-## Minimum Setup
-
-Copy the example env file:
+## Basic setup
 
 ```bash
 cp .env.example .env
 ```
 
-For a local run, the minimum useful values are:
+Set `ODOO_VERSION` to the version represented by the checked-out branch, for example:
 
 ```env
 ODOO_VERSION=18.0
@@ -66,18 +52,7 @@ ODOO_REPORT_URL=http://odoo:8069
 LOAD=web,session_redis
 ```
 
-Notes:
-
-- `CADDY_DOMAIN=localhost` is fine for local usage.
-- `ODOO_BASE_URL` should match the public URL you will actually open in the browser.
-- `ODOO_REPORT_URL` should stay internal as `http://odoo:8069` in this stack.
-- `LOAD=web,session_redis` is the current default because Redis session storage is part of this project.
-
-If you need raw Odoo config entries that are not explicitly exposed as separate env vars, use `ODOO_EXTRA_OPTS`. Its content is appended verbatim to the generated `odoo.conf`. This is useful for addons that require extra config blocks in `odoo.conf`, for example OCA `queue_job`.
-
-## First Launch
-
-Build images and start the stack:
+Build and start:
 
 ```bash
 make init
@@ -85,73 +60,38 @@ make up
 make ps
 ```
 
-Open Odoo in the browser:
-
-- local: `https://localhost`
-- server: `https://<CADDY_DOMAIN>`
-
-If the database does not exist yet:
-
-1. open `https://<CADDY_DOMAIN>/web/database/manager`
-2. create a database with the same name as `DB_NAME`
-3. use `ADMIN_PASSWORD` as the master password
-
-If you want raw Compose commands instead of `make`:
+Useful commands:
 
 ```bash
-docker compose --env-file .env --profile build build odoo-core
-docker compose --env-file .env build odoo
-docker compose --env-file .env up -d
-docker compose --env-file .env ps
+make restart
+make stop
+make down
+make logs
+make log-odoo
+make log-db
+make sh
+make odoo-shell
+make psql
+make config
+make backup
 ```
 
-## Main Commands
-
-For the normal workflow:
-
-- `make init` builds the reusable base image and then the project Odoo image with remote addons.
-- `make up` starts PostgreSQL, Redis, `kwkhtmltopdf`, Odoo, and Caddy in the background.
-- `make ps` shows whether the containers are up and healthy.
-- `make logs` tails logs from the full stack when you want to see startup or runtime errors.
-
-For day-to-day work:
-
-- `make restart` restarts services after changing `.env` or after updating local modules.
-- `make stop` stops containers but keeps them available for a later `make up`.
-- `make down` removes containers and networks but keeps named volumes and data.
-- `make sh` opens a shell inside the Odoo container.
-- `make odoo-shell` opens `odoo shell --no-http` inside the running Odoo container.
-- `make psql` opens a PostgreSQL shell against the configured database.
-
-For diagnostics:
-
-- `make log-odoo` follows only Odoo logs.
-- `make log-db` follows only PostgreSQL logs.
-- `make config` prints the final Compose configuration after env interpolation.
-
-For maintenance:
-
-- `make backup` creates a database and filestore backup under `backups/`.
-- `make restore BACKUP=backups/<name>` restores a previously created backup.
-
-Use a different env file or project name when needed:
+A custom env file/project name can be used for isolated environments:
 
 ```bash
 make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
 ```
 
-## Odoo CE / EE
+## Odoo Community / Enterprise
 
-This project supports both Odoo Community Edition and Odoo Enterprise Edition.
-
-For Community Edition:
+Community:
 
 ```env
 ODOO_EDITION=ce
 ODOO_VERSION=18.0
 ```
 
-For Enterprise Edition:
+Enterprise:
 
 ```env
 ODOO_EDITION=ee
@@ -162,260 +102,284 @@ ODOO_EE_GIT_USER=x-access-token
 ODOO_EE_GIT_HOST=github.com
 ```
 
-Then rebuild the images:
+For reproducible builds, pin `ODOO_CE_REF` / `ODOO_ENTERPRISE_REF` to the required ref.
 
-```bash
-make init
-make up
-```
+## Addons
 
-Notes:
-
-- `ODOO_EDITION=ee` enables the Enterprise build path in `base/Dockerfile`.
-- Enterprise addons are installed into `${ODOO_EE_ADDONS_DIR}`.
-- The runtime automatically appends `${ODOO_EE_ADDONS_DIR}` to `addons_path`.
-- If you want reproducible Enterprise builds, also set `ODOO_ENTERPRISE_REF`.
-- If your Enterprise repository is hosted outside GitHub, set matching `ODOO_EE_GIT_HOST`, `ODOO_EE_GIT_USER`, and `ODOO_EE_GIT_TOKEN`.
-
-## Working with Odoo Modules
-
-### Where modules come from
-
-- core Odoo addons: `/opt/odoo/addons`
-- remote addons baked into the image: `/opt/extra-addons`
-- local project addons: `/opt/local-addons`
-
-Default runtime `addons_path`:
+Addon locations inside the Odoo container:
 
 ```text
-/opt/odoo/addons,/opt/extra-addons,/opt/local-addons
+/opt/odoo/addons
+/opt/extra-addons
+/opt/local-addons
 ```
 
-If `ODOO_EDITION=ee`, the runtime also appends `${ODOO_EE_ADDONS_DIR}` automatically.
+Enterprise builds also append the Enterprise addons directory.
 
-### Add a local custom module
+Remote repositories are configured in `addons/addons.yml` and are copied into `/opt/extra-addons` during the addons image build. Local custom modules belong in `local-addons/`.
 
-Put the module in `local-addons/`:
-
-```text
-local-addons/
-  my_module/
-    __init__.py
-    __manifest__.py
-    ...
-```
-
-Then restart Odoo:
-
-```bash
-make restart
-```
-
-If the module has Python dependencies, add them to `addons/requirements.txt` and rebuild the `odoo` image:
+After changing remote addon dependencies:
 
 ```bash
 make build-addons
 make up
 ```
 
-### Add a new remote addon repository
-
-Edit `addons/addons.yml` and add another repo entry in the same format already used there. This file is processed by `git-aggregator`, so if you need the full manifest format, merge syntax, or advanced options, use the upstream documentation: [git-aggregator](https://github.com/acsone/git-aggregator).
-
-Then rebuild the addons image:
-
-```bash
-make build-addons
-make up
-```
-
-### Install or update a module
-
-Update one module from CLI:
+To update one module manually:
 
 ```bash
 docker compose exec odoo bash -lc 'odoo -c /etc/odoo.conf -d "$DB_NAME" -u module_name --stop-after-init'
 ```
 
-After that restart Odoo:
+## OpenUpgrade migrations
 
-```bash
-make restart
+The version branches can run an OpenUpgrade migration from the immediately preceding major Odoo version. OpenUpgrade must be executed one major version at a time.
+
+Typical chain:
+
+```text
+Odoo 16 database
+    |
+    | branch 17.0
+    v
+Odoo 17 database
+    |
+    | branch 18.0
+    v
+Odoo 18 database
+    |
+    | branch 19.0
+    v
+Odoo 19 database
 ```
 
-## Advanced Settings
+### Source and target database model
 
-This section contains the project internals and lower-level runtime details.
+The source database is never migrated in place.
 
-### Config rendering
+For every migration hop the entrypoint performs this workflow:
 
-- `.env` is mounted into the container as `/run/odoo/.env`
-- `/etc/odoo.conf` is rendered from `base/config/odoo.conf.tpl`
-- unresolved or empty config lines are dropped during rendering
-- `ODOO_EXTRA_OPTS` is appended at the end of the generated config
-
-That means you can inject extra Odoo config without modifying the template.
-
-### Ports
-
-- host ports:
-  - `80:80`
-  - `443:443`
-  - `443:443/udp`
-- internal-only services:
-  - Odoo HTTP: `8069`
-  - Odoo XML-RPCS: `8071`
-  - Odoo gevent/websocket: `8072`
-  - PostgreSQL: `5432`
-  - Redis: `6379`
-  - `kwkhtmltopdf`: `8080`
-
-### Volumes
-
-- `db-data` -> `/var/lib/postgresql/data`
-- `odoo-data` -> `/var/lib/odoo`
-- `redis-data` -> `/data`
-- `caddy-data` -> `/data`
-- `caddy-config` -> `/config`
-- `${LOCAL_ADDONS_DIR}` -> `/opt/local-addons`
-
-### Data locations
-
-- PostgreSQL data: `db-data`
-- Odoo filestore: `/var/lib/odoo/filestore/${DB_NAME}`
-- Redis persistence: `redis-data`
-- Caddy certificates and state: `caddy-data`, `caddy-config`
-
-### Addons build behavior
-
-- `addons/addons.yml` is processed by `git-aggregator`
-- module directories are copied into `/opt/extra-addons`
-- Python and Debian dependencies are resolved from addon metadata during build
-- `addons/requirements.txt` is installed into the image during the addons build stage
-
-### Redis sessions
-
-- default `LOAD` includes `session_redis`
-- Redis is private to Docker Compose and not published to the host
-- Odoo uses `REDIS_PASSWORD`
-- old filesystem sessions are cleaned up by the entrypoint when Redis session storage is enabled
-
-### Reverse proxy
-
-- public traffic goes to Caddy, not directly to Odoo
-- `caddy/Caddyfile` proxies:
-  - normal HTTP traffic to `odoo:8069`
-  - `/longpolling/*` and `/websocket` to `odoo:8072`
-- `PROXY_MODE=True` is expected for this topology
-
-### Local vs server use
-
-This repository does not have a separate dev compose file. Local, staging, and production separation is done through:
-
-- different `.env` files
-- different `COMPOSE_PROJECT_NAME`
-
-Examples:
-
-```bash
-make up ENV_FILE=.env.local COMPOSE_PROJECT_NAME=docker-odoo-local
-make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
-make up ENV_FILE=.env.prod COMPOSE_PROJECT_NAME=docker-odoo-prod
+```text
+OPENUPGRADE_SOURCE_DATABASE_NAME
+              |
+              | pg_dump / pg_restore
+              v
+OPENUPGRADE_TARGET_DATABASE_NAME
+              |
+              | OpenUpgrade -u all
+              v
+migrated target database
+              |
+              | normal Odoo startup
+              v
+Odoo runs only on the target database
 ```
 
-### Production / staging notes
+Example for `16 -> 17`:
 
-There is no `docker-compose.prod.yml` in this repository.
+```env
+ODOO_VERSION=17.0
+OPENUPGRADE=True
+OPENUPGRADE_SOURCE_DATABASE_NAME=odoo16
+OPENUPGRADE_TARGET_DATABASE_NAME=odoo17
+OPENUPGRADE_TARGET_VERSION=18.0
+OPENUPGRADE_RECREATE_DATABASE=False
+OPENUPGRADE_FORCE=False
+OPENUPGRADE_COPY_FILESTORE=True
+```
 
-What is already production-friendly in the current project:
+The result is:
 
-- PostgreSQL is not published to the host
-- Redis is not published to the host
-- Odoo is not published directly to the host
-- named volumes persist database, filestore, Redis, and Caddy state
-- reverse proxy handling is already configured
+```text
+odoo16              unchanged source
+odoo17              copy of odoo16, then migrated to Odoo 17
+```
 
-What you still need to set correctly per environment:
+For the next hop switch to the `18.0` branch and use:
 
-- `CADDY_DOMAIN`
-- `CADDY_EMAIL`
-- `ODOO_BASE_URL`
-- `ADMIN_PASSWORD`
-- `DB_PASSWORD`
-- `REDIS_PASSWORD`
-- `WORKERS`
-- `LIST_DB`
-- `DBFILTER`
+```env
+ODOO_VERSION=18.0
+OPENUPGRADE=True
+OPENUPGRADE_SOURCE_DATABASE_NAME=odoo17
+OPENUPGRADE_TARGET_DATABASE_NAME=odoo18
+OPENUPGRADE_TARGET_VERSION=18.0
+```
 
-### Password rotation caveat
+For `18 -> 19` on branch `19.0`:
 
-Changing `DB_PASSWORD` for an already initialized PostgreSQL volume is not just an env change. The existing `db-data` volume keeps the original PostgreSQL credentials, so password rotation requires an intentional PostgreSQL-side change or volume re-creation.
+```env
+ODOO_VERSION=19.0
+OPENUPGRADE=True
+OPENUPGRADE_SOURCE_DATABASE_NAME=odoo18
+OPENUPGRADE_TARGET_DATABASE_NAME=odoo19
+OPENUPGRADE_TARGET_VERSION=19.0
+```
 
-## Backup
+`OPENUPGRADE_TARGET_VERSION` is the final destination known to OpenUpgrade. During a multi-hop migration such as `16 -> 17 -> 18`, it may be kept at `18.0` on both hops. The entrypoint validates the completed hop against `ODOO_VERSION`, not against the final target.
 
-Use the built-in scripts:
+A complete starting point is available in `openupgrade.env.example` on branches that support the migration workflow.
+
+### What happens on startup
+
+With `OPENUPGRADE=True` the entrypoint:
+
+1. validates that source and target names are both set and different;
+2. verifies that the source PostgreSQL database exists;
+3. creates the target database with `createdb`;
+4. clones source into target using `pg_dump --format=custom | pg_restore`;
+5. optionally copies the matching Odoo filestore;
+6. runs Odoo with `openupgrade_framework`, `-u all`, `--stop-after-init`, `--no-http`, and zero workers/cron threads;
+7. verifies that the target `base` module reports the current branch major version;
+8. stores a successful migration marker in `ir_config_parameter`;
+9. starts normal Odoo against the target database.
+
+The source database is only read by `pg_dump`; the new Odoo version is never started against it.
+
+### Existing target database safety
+
+The target database is not overwritten by default.
+
+If the target exists and contains a matching successful migration marker, the migration is skipped and normal Odoo starts on that target.
+
+If the target exists without that marker, startup stops with an error. This includes a database left by a failed/partial migration.
+
+To intentionally discard the target and rebuild it from source:
+
+```env
+OPENUPGRADE_RECREATE_DATABASE=True
+```
+
+This drops only `OPENUPGRADE_TARGET_DATABASE_NAME`, creates it again from the source, and retries the migration. Never use the same name for source and target.
+
+`OPENUPGRADE_FORCE=True` is intended only for an explicit re-run on an already completed target. Normally it should remain `False`; for a clean retry after a failed migration use `OPENUPGRADE_RECREATE_DATABASE=True` instead.
+
+### PostgreSQL permissions
+
+The PostgreSQL role configured by `DB_USER` must be able to:
+
+- connect to the source database;
+- read all data required by `pg_dump`;
+- create databases (`CREATEDB` or equivalent administrative permission);
+- create/restore schema objects in the target database;
+- drop the target database when `OPENUPGRADE_RECREATE_DATABASE=True`.
+
+The source and target databases are expected to be reachable through the same configured PostgreSQL endpoint (`DB_HOST` / `DB_PORT`). This works with an external PostgreSQL server; the bundled Compose PostgreSQL service is not required for the migration database itself.
+
+### Filestore
+
+PostgreSQL cloning does not clone the Odoo filestore.
+
+When `OPENUPGRADE_COPY_FILESTORE=True` (default for the migration example), the entrypoint copies:
+
+```text
+${DATA_DIR}/filestore/<source_database>
+    ->
+${DATA_DIR}/filestore/<target_database>
+```
+
+This works only when the source filestore is mounted into the container under the expected `DATA_DIR` path. If the database is on an external PostgreSQL server but the source filestore lives on another Odoo host, copy or mount that filestore before validating attachments/documents/images. If no source filestore is visible, the entrypoint logs a warning and continues with the database migration.
+
+### Custom migration scripts
+
+Custom/OCA addons must have code compatible with the target Odoo version before the migration is attempted.
+
+Module-local upgrade scripts should live in the addon itself, for example:
+
+```text
+my_module/
+  migrations/
+    18.0.1.0.0/
+      pre-migration.py
+      post-migration.py
+```
+
+or the equivalent Odoo `upgrades/` directory supported by the target version.
+
+For project-wide external scripts use the configured upgrade path, for example:
+
+```env
+UPGRADE_PATH=/opt/local-addons/upgrade
+```
+
+All installed modules in the source database must be available in compatible form in the target image. Before a real migration it is useful to inspect the installed module list:
+
+```sql
+SELECT name, latest_version
+FROM ir_module_module
+WHERE state = 'installed'
+ORDER BY name;
+```
+
+### Recommended migration procedure
+
+For each hop:
+
+1. checkout the target major-version branch;
+2. start from a verified source database of the previous major version;
+3. configure unique source and target database names;
+4. build the target image (`make init`);
+5. start the stack and follow `make log-odoo`;
+6. fix module/migration errors if needed;
+7. for a clean retry set `OPENUPGRADE_RECREATE_DATABASE=True` or use a new target name;
+8. after success restart normally and functionally validate the migrated Odoo instance;
+9. use that successful target as the source for the next major-version hop.
+
+Do not continue to the next major version from a database whose current hop has not been validated.
+
+## Runtime configuration
+
+`.env` is mounted into the container as `/run/odoo/.env`. `/etc/odoo.conf` is rendered by `base/scripts/odoorc.py` from `base/config/odoo.conf.tpl`.
+
+Use `ODOO_EXTRA_OPTS` for Odoo config entries that are not exposed as dedicated environment variables.
+
+Default service topology:
+
+- Caddy: public ports `80/443`
+- Odoo HTTP: internal `8069`
+- Odoo gevent/websocket: internal `8072`
+- PostgreSQL: internal `5432` when the bundled DB is used
+- Redis: internal `6379`
+- `kwkhtmltopdf`: internal `8080`
+
+Persistent data:
+
+- PostgreSQL: `db-data`
+- Odoo data/filestore: `odoo-data`
+- Redis: `redis-data`
+- Caddy: `caddy-data`, `caddy-config`
+
+## Backup and restore
+
+Create a backup:
 
 ```bash
 make backup
 make backup NAME=before-upgrade
 ```
 
-Direct usage:
+The backup contains the PostgreSQL dump, filestore archive, and manifest under `backups/<name>/`.
+
+Restore:
 
 ```bash
-./scripts/backup.sh
-./scripts/backup.sh before-upgrade
+make restore BACKUP=backups/<name>
 ```
 
-The backup creates `backups/<timestamp-or-name>/` with:
-
-- `db.dump`
-- `filestore.tar.gz`
-- `manifest.txt`
-
-What is backed up:
-
-- PostgreSQL database `${DB_NAME}`
-- Odoo filestore from `${DATA_DIR}/filestore/${DB_NAME}`
-
-## Restore
-
-Restore overwrites the current database and filestore for `${DB_NAME}`.
-
-Restore a backup:
-
-```bash
-make restore BACKUP=backups/2026-05-05_12-00-00
-```
-
-Direct usage:
-
-```bash
-./scripts/restore.sh backups/2026-05-05_12-00-00
-```
-
-Restore flow:
-
-- stop `odoo`
-- restore `db.dump` into PostgreSQL
-- delete `${DATA_DIR}/filestore/${DB_NAME}`
-- extract `filestore.tar.gz`
-- start `odoo`
+A restore overwrites the configured `DB_NAME` database and corresponding filestore, so verify the target environment before running it.
 
 ## Security
 
-- do not commit `.env`
-- replace all `CHANGE_ME_*` values before real use
-- keep PostgreSQL private
-- keep Redis private
-- run public deployments behind Caddy or another reverse proxy
-- do not store backups in Git
-- keep `ADMIN_PASSWORD` strong
+- do not commit `.env`;
+- replace all `CHANGE_ME_*` values;
+- keep PostgreSQL and Redis private unless explicitly required;
+- do not store production backups in Git;
+- use a strong Odoo master password;
+- test migrations on copies, never directly on the production database.
 
 ## References
 
-* [Odoo 18 documentation](https://www.odoo.com/documentation/18.0/)
-* [git-aggregator](https://github.com/acsone/git-aggregator)
-* [Docker Compose CLI reference](https://docs.docker.com/engine/reference/commandline/compose/)
-* [Caddy documentation](https://caddyserver.com/docs/)
-* [kwkhtmltopdf](https://github.com/acsone/kwkhtmltopdf)
+- [OCA/OpenUpgrade](https://github.com/OCA/OpenUpgrade)
+- [git-aggregator](https://github.com/acsone/git-aggregator)
+- [Docker Compose CLI](https://docs.docker.com/engine/reference/commandline/compose/)
+- [Caddy](https://caddyserver.com/docs/)
+- [kwkhtmltopdf](https://github.com/acsone/kwkhtmltopdf)
