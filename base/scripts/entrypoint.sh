@@ -350,6 +350,7 @@ clone_openupgrade_database() {
       --format=custom \
       --no-owner \
       --no-privileges \
+      --verbose \
       "${source_db}" \
       | PGPASSWORD="${DB_PASSWORD}" pg_restore \
           -h "${DB_HOST}" \
@@ -358,6 +359,7 @@ clone_openupgrade_database() {
           -d "${target_db}" \
           --no-owner \
           --no-privileges \
+          --verbose \
           --exit-on-error; then
     echo "ERROR: failed to clone ${source_db} into ${target_db}; target database was left in place for inspection" >&2
     return 1
