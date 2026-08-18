@@ -2,14 +2,6 @@
 
 `docker-odoo` is a Docker Compose project for building and running Odoo from source with custom addons. It uses a two-stage image build, PostgreSQL, Redis-backed sessions, internal `kwkhtmltopdf`, and Caddy as the public entrypoint. Odoo core is installed in the `base/` image, extra addon repositories are pulled during the `addons/` image build, local modules are mounted from `local-addons/`, and runtime configuration is generated from `.env` into `/etc/odoo.conf`.
 
-Each major Odoo version lives in its corresponding repository branch. Use the branch that matches the Odoo version you want to build or migrate to:
-
-```text
-17.0 -> Odoo 17
-18.0 -> Odoo 18
-19.0 -> Odoo 19
-```
-
 ## Stack
 
 - Odoo
@@ -56,10 +48,10 @@ Copy the example env file:
 cp .env.example .env
 ```
 
-Set `ODOO_VERSION` to the checked-out branch version. For example, on branch `18.0`:
+Set `ODOO_VERSION` to the checked-out branch version. For example, on branch `17.0`:
 
 ```env
-ODOO_VERSION=18.0
+ODOO_VERSION=17.0
 ODOO_EDITION=ce
 DATABASE_NAME=odoo
 DB_NAME=${DATABASE_NAME}
@@ -173,7 +165,7 @@ make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
 The same pattern works for all Make targets, including migrations:
 
 ```bash
-make migrate ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
+make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
 ```
 
 ## Odoo CE / EE
@@ -320,34 +312,6 @@ When `DB_HOST` points to another machine, Odoo uses that external PostgreSQL end
 
 OpenUpgrade is used to migrate an existing database one Odoo major version at a time.
 
-Supported migration hops by target branch:
-
-```text
-branch 17.0 -> Odoo 16 -> Odoo 17
-branch 18.0 -> Odoo 17 -> Odoo 18
-branch 19.0 -> Odoo 18 -> Odoo 19
-```
-
-A multi-hop migration therefore looks like:
-
-```text
-Odoo 16 database
-    |
-    | branch 17.0
-    v
-Odoo 17 database
-    |
-    | branch 18.0
-    v
-Odoo 18 database
-    |
-    | branch 19.0
-    v
-Odoo 19 database
-```
-
-OpenUpgrade must not skip major versions.
-
 ### Source and Target Database Model
 
 The source database is never migrated in place.
@@ -366,13 +330,13 @@ OPENUPGRADE_TARGET_DATABASE_NAME
 migrated target database
 ```
 
-Example for `16 -> 17`:
+Example for `16.0 -> 17.0`:
 
 ```env
 ODOO_VERSION=17.0
 OPENUPGRADE=True
-OPENUPGRADE_SOURCE_DATABASE_NAME=odoo16
-OPENUPGRADE_TARGET_DATABASE_NAME=odoo17
+OPENUPGRADE_SOURCE_DATABASE_NAME=ODOO_16
+OPENUPGRADE_TARGET_DATABASE_NAME=ODOO_17
 OPENUPGRADE_TARGET_VERSION=17.0
 OPENUPGRADE_RECREATE_DATABASE=False
 OPENUPGRADE_FORCE=False
@@ -382,37 +346,9 @@ OPENUPGRADE_COPY_FILESTORE=True
 The result is:
 
 ```text
-odoo16    unchanged source database
-odoo17    copy of odoo16, migrated to Odoo 17
+ODOO_16    unchanged source database
+ODOO_17    copy of ODOO_16, migrated to Odoo 17
 ```
-
-For `17 -> 18`:
-
-```env
-ODOO_VERSION=18.0
-OPENUPGRADE=True
-OPENUPGRADE_SOURCE_DATABASE_NAME=odoo17
-OPENUPGRADE_TARGET_DATABASE_NAME=odoo18
-OPENUPGRADE_TARGET_VERSION=18.0
-OPENUPGRADE_RECREATE_DATABASE=False
-OPENUPGRADE_FORCE=False
-OPENUPGRADE_COPY_FILESTORE=True
-```
-
-For `18 -> 19`:
-
-```env
-ODOO_VERSION=19.0
-OPENUPGRADE=True
-OPENUPGRADE_SOURCE_DATABASE_NAME=odoo18
-OPENUPGRADE_TARGET_DATABASE_NAME=odoo19
-OPENUPGRADE_TARGET_VERSION=19.0
-OPENUPGRADE_RECREATE_DATABASE=False
-OPENUPGRADE_FORCE=False
-OPENUPGRADE_COPY_FILESTORE=True
-```
-
-`OPENUPGRADE_TARGET_VERSION` is the final destination known to OpenUpgrade. For a multi-hop chain it may be set to the final intended version across intermediate hops. The entrypoint validates each completed hop against the current branch `ODOO_VERSION`.
 
 Use `openupgrade.env.example` as the starting point on branches that contain the OpenUpgrade workflow.
 
@@ -605,7 +541,7 @@ Module-local migration scripts should live in the addon itself, for example:
 ```text
 my_module/
   migrations/
-    18.0.1.0.0/
+    17.0.1.0.0/
       pre-migration.py
       post-migration.py
 ```
@@ -655,28 +591,6 @@ cp openupgrade.env.example .env.migrate-17
 make init ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
 make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
 make up ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
-```
-
-Example `17 -> 18`:
-
-```bash
-git switch agent/openupgrade-18
-cp openupgrade.env.example .env.migrate-18
-# edit .env.migrate-18
-make init ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
-make migrate ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
-make up ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
-```
-
-Example `18 -> 19`:
-
-```bash
-git switch agent/openupgrade-19
-cp openupgrade.env.example .env.migrate-19
-# edit .env.migrate-19
-make init ENV_FILE=.env.migrate-19 COMPOSE_PROJECT_NAME=odoo-migrate-19
-make migrate ENV_FILE=.env.migrate-19 COMPOSE_PROJECT_NAME=odoo-migrate-19
-make up ENV_FILE=.env.migrate-19 COMPOSE_PROJECT_NAME=odoo-migrate-19
 ```
 
 Do not continue to the next major version from a database whose current hop has not been validated.
@@ -1055,8 +969,6 @@ Verify the configured target environment before running restore because it is de
 ## References
 
 - [Odoo 17 documentation](https://www.odoo.com/documentation/17.0/)
-- [Odoo 18 documentation](https://www.odoo.com/documentation/18.0/)
-- [Odoo 19 documentation](https://www.odoo.com/documentation/19.0/)
 - [OCA/OpenUpgrade](https://github.com/OCA/OpenUpgrade)
 - [git-aggregator](https://github.com/acsone/git-aggregator)
 - [Docker Compose CLI reference](https://docs.docker.com/engine/reference/commandline/compose/)

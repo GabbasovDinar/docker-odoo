@@ -1,36 +1,6 @@
 # This is a basic template. Disconnect your file from it to add your own repos
 # Check https://github.com/acsone/git-aggregator for possible configuration options
 
-./oca-web:
-    remotes:
-        remote_1: https://github.com/OCA/web.git
-    merges:
-        -
-            remote: remote_1
-            ref: "17.0"
-            depth: 1
-    target: oca-web
-
-./oca-server-tools:
-    remotes:
-        remote_1: https://github.com/OCA/server-tools.git
-    merges:
-        -
-            remote: remote_1
-            ref: "17.0"
-            depth: 1
-    target: oca-server-tools
-
-./camptocamp-odoo-cloud-platform:
-    remotes:
-        remote_1: https://github.com/camptocamp/odoo-cloud-platform.git
-    merges:
-        -
-            remote: remote_1
-            ref: "17.0"
-            depth: 1
-    target: camptocamp-odoo-cloud-platform
-
 ./oca-openupgrade:
     remotes:
         remote_1: https://github.com/OCA/OpenUpgrade.git
