@@ -1,6 +1,6 @@
 # docker-odoo
 
-`docker-odoo` is a Docker Compose project for building and running Odoo from source with custom addons. It uses a two-stage image build, PostgreSQL, Redis-backed sessions, internal `kwkhtmltopdf`, and Caddy as the public entrypoint. Odoo core is installed in the `base/` image, extra addon repositories are pulled during the `addons/` image build, local modules are mounted from `local-addons/`, and runtime configuration is generated from `.env` into `/etc/odoo.conf`.
+[`docker-odoo`](https://github.com/GabbasovDinar/docker-odoo) is a Docker Compose project for building and running Odoo from source with custom addons. It uses a two-stage image build, PostgreSQL, Redis-backed sessions, internal `kwkhtmltopdf`, and Caddy as the public entrypoint. Odoo core is installed in the `base/` image, extra addon repositories are pulled during the `addons/` image build, local modules are mounted from `local-addons/`, and runtime configuration is generated from `.env` into `/etc/odoo.conf`.
 
 ## Stack
 
