@@ -3,6 +3,7 @@ services:
     environment:
       MODE: test
       DEV_MODE: ""
+      LOG_LEVEL: ${TEST_LOG_LEVEL:-info}
       INIT: ""
       UPDATE: ""
       TEST_ENABLE: ""
