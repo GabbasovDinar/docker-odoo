@@ -1,12 +1,7 @@
 ENV_FILE ?= .env
 COMPOSE_PROJECT_NAME ?= docker-odoo
 MODE ?= prod
-
-ifeq ($(MODE),dev)
-COMPOSE_FILES ?= -f docker-compose.yml -f docker-compose.dev.yml
-else
-COMPOSE_FILES ?= -f docker-compose.yml
-endif
+COMPOSE_FILES ?= -f docker-compose.yml $(if $(filter dev,$(MODE)),-f docker-compose.dev.yml)
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -72,6 +67,10 @@ pull: check-env ## Pull runtime images
 .PHONY: up
 up: check-env ## Start the stack
 	$(COMPOSE) up -d
+
+.PHONY: dev
+dev: MODE=dev
+dev: up ## Start the stack in development mode
 
 .PHONY: migrate
 migrate: check-env ## Run OpenUpgrade once and overwrite migration.log
