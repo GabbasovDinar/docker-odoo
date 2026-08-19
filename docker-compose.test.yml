@@ -1,0 +1,20 @@
+services:
+  odoo:
+    environment:
+      MODE: test
+      DEV_MODE: ""
+      INIT: ""
+      UPDATE: ""
+      TEST_ENABLE: ""
+      TEST_FILE: ""
+      TEST_TAGS: ""
+      STOP_AFTER_INIT: ""
+      WORKERS: "0"
+      MAX_CRON_THREADS: "0"
+      HTTP_ENABLE: "True"
+      LOAD: web
+      ODOO_SESSION_REDIS: "0"
+    command: ["odoo-test"]
+    restart: "no"
+    healthcheck:
+      disable: true
