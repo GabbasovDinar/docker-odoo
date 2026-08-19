@@ -516,22 +516,125 @@ ALTER ROLE odoo CREATEDB;
 
 When `TEST_DB` points to an existing initialized database, automatic database creation and deletion are not used.
 
-## Odoo CE / EE
+## Odoo Source and CE / EE
 
-This project supports both Odoo Community Edition and Odoo Enterprise Edition.
+The base image fetches the Odoo Community source directly from Git with Docker BuildKit `ADD`. The source repository and revision are independent from the Docker image tag, so the build can use the official upstream repository, a fork, a self-hosted GitLab repository, a branch, a tag, or a pinned commit without changing `base/Dockerfile`.
 
-For Community Edition:
+The default configuration preserves the existing behavior and builds Odoo 17 from the official GitHub repository:
 
 ```env
 ODOO_EDITION=ce
-ODOO_VERSION=<current-branch-version>
+ODOO_VERSION=17.0
+ODOO_REPO=https://github.com/odoo/odoo.git
+ODOO_BRANCH=${ODOO_VERSION}
+ODOO_REF=
 ```
 
-For Enterprise Edition:
+Source selection uses this order:
+
+1. `ODOO_REF` when it is non-empty;
+2. `ODOO_BRANCH` when `ODOO_REF` is empty;
+3. `ODOO_VERSION` as the final default.
+
+`ODOO_CE_REF` and `ODOO_CE_VERSION` are still accepted by `docker-compose.yml` as compatibility fallbacks for older env files, but new configurations should use `ODOO_REPO`, `ODOO_BRANCH`, and `ODOO_REF`.
+
+### Use another public Odoo repository
+
+For example, to build from a self-hosted public GitLab fork:
+
+```env
+ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
+ODOO_BRANCH=17.0
+ODOO_REF=
+```
+
+Then rebuild the base and project images:
+
+```bash
+make init
+```
+
+The selected checkout becomes `/opt/odoo`. Odoo Python requirements are installed from `/opt/odoo/requirements.txt`, so source code and requirements always come from the same revision.
+
+### Pin Odoo to a commit
+
+For reproducible builds, set `ODOO_REF` to a full 40-character Git commit SHA:
+
+```env
+ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
+ODOO_BRANCH=17.0
+ODOO_REF=0123456789abcdef0123456789abcdef01234567
+```
+
+A pinned `ODOO_REF` overrides `ODOO_BRANCH`. Clear `ODOO_REF` to follow the configured branch again. BuildKit Git URL fragments require the full commit hash rather than a shortened SHA.
+
+Rebuild after changing the source repository or ref:
+
+```bash
+make build-base
+make build-addons
+```
+
+or simply:
+
+```bash
+make init
+```
+
+### Private Odoo repository over HTTPS
+
+Private Odoo source authentication is handled by BuildKit itself while processing the Dockerfile `ADD`. This happens outside normal `RUN git ...` commands, so container `.netrc` files and the `GITHUB_TOKEN` / `GITLAB_TOKEN` variables used by the addon `git-aggregator` flow do not automatically authenticate the Odoo source fetch.
+
+The project exposes two BuildKit pre-flight secrets for this purpose. Set only one of them.
+
+For private GitHub repositories, and for GitLab personal/project access tokens where any non-empty Git username is accepted, set a token directly:
+
+```env
+ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
+ODOO_BRANCH=17.0
+ODOO_REF=0123456789abcdef0123456789abcdef01234567
+ODOO_GIT_AUTH_TOKEN=glpat-xxxxxxxxxxxxxxxx
+ODOO_GIT_AUTH_HEADER=
+```
+
+Compose passes `ODOO_GIT_AUTH_TOKEN` to BuildKit using the predefined secret ID `GIT_AUTH_TOKEN`. BuildKit uses `x-access-token` as the HTTPS username. GitLab personal and project access tokens accept any non-empty username for Git-over-HTTPS authentication; the token needs repository read access.
+
+For credentials that require a specific username, such as a GitLab deploy token or CI job token, use a raw HTTP Basic authorization header instead. Generate the Base64 payload without a newline:
+
+```bash
+printf '%s' 'gitlab+deploy-token-123:YOUR_DEPLOY_TOKEN' | base64 -w0
+```
+
+Then put the result in the env file:
+
+```env
+ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
+ODOO_BRANCH=17.0
+ODOO_REF=0123456789abcdef0123456789abcdef01234567
+ODOO_GIT_AUTH_TOKEN=
+ODOO_GIT_AUTH_HEADER=Basic BASE64_USERNAME_AND_TOKEN
+```
+
+For a GitLab CI job token the username is normally `gitlab-ci-token`, so the same pattern applies:
+
+```bash
+printf '%s' 'gitlab-ci-token:YOUR_CI_JOB_TOKEN' | base64 -w0
+```
+
+Both values are provided to the build as Docker build secrets rather than Dockerfile `ARG` or `ENV` values, so they are not baked into image layers. The local `.env` still contains the secret value and must never be committed.
+
+If authentication fails, first verify the repository URL, token scope, and that the configured credential can clone the repository over HTTPS. For GitLab, a read-only token should have repository read permission such as `read_repository`.
+
+### Enterprise Edition
+
+Enterprise mode uses the same configurable Community/core source described above, then installs Enterprise addons separately from `ODOO_ENTERPRISE_REPO`.
 
 ```env
 ODOO_EDITION=ee
-ODOO_VERSION=<current-branch-version>
+ODOO_VERSION=17.0
+ODOO_REPO=https://github.com/odoo/odoo.git
+ODOO_BRANCH=17.0
+ODOO_REF=
 ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
 ODOO_EE_GIT_TOKEN=your_token
 ODOO_EE_GIT_USER=x-access-token
@@ -550,8 +653,8 @@ Notes:
 - `ODOO_EDITION=ee` enables the Enterprise build path in `base/Dockerfile`.
 - Enterprise addons are installed into `${ODOO_EE_ADDONS_DIR}`.
 - The runtime automatically appends `${ODOO_EE_ADDONS_DIR}` to `addons_path`.
+- For reproducible Community/core builds, pin `ODOO_REF` to the required full commit SHA.
 - For reproducible Enterprise builds, set `ODOO_ENTERPRISE_REF` to the required branch, tag, or commit.
-- For reproducible Community builds, use `ODOO_CE_REF` when needed.
 - If the Enterprise repository is hosted outside GitHub, set matching `ODOO_EE_GIT_HOST`, `ODOO_EE_GIT_USER`, and `ODOO_EE_GIT_TOKEN`.
 
 ## Working with Odoo Modules
@@ -631,7 +734,7 @@ DB_USER=odoo
 DB_PASSWORD=CHANGE_ME_DB_PASSWORD
 ```
 
-To use PostgreSQL on another VM or server, point `DB_HOST` to that server:
+To use PostgreSQL on another VM or server, point `DB_HOST` at that server:
 
 ```env
 DB_HOST=10.20.0.15
@@ -1318,6 +1421,8 @@ Verify the configured target environment before running restore because it is de
 
 - [Odoo 17 documentation](https://www.odoo.com/documentation/17.0/)
 - [Odoo 17 testing documentation](https://www.odoo.com/documentation/17.0/developer/reference/backend/testing.html)
+- [Dockerfile `ADD` reference](https://docs.docker.com/reference/dockerfile/#add)
+- [Docker build secrets](https://docs.docker.com/build/building/secrets/)
 - [OCA/oca-ci](https://github.com/OCA/oca-ci)
 - [manifestoo](https://github.com/acsone/manifestoo)
 - [OCA/OpenUpgrade](https://github.com/OCA/OpenUpgrade)
