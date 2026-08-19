@@ -178,6 +178,7 @@ The dev runtime enables:
 
 - `debugpy` on TCP port `5678` by default;
 - Odoo `--dev=all` by default;
+- Odoo `debug` logging by default;
 - `--workers=0` so requests stay in the process attached to the debugger;
 - a loopback-only host mapping for the debug port: `127.0.0.1:5678`;
 - local addons mounted from `local-addons/` to `/opt/local-addons` inside the container.
@@ -204,6 +205,13 @@ This is equivalent to:
 
 ```bash
 make up MODE=dev
+```
+
+Development mode overrides the normal `LOG_LEVEL` with `DEV_LOG_LEVEL`, which defaults to `debug`. Override it when a quieter or more detailed session is needed:
+
+```bash
+DEV_LOG_LEVEL=info make dev
+DEV_LOG_LEVEL=debug_sql make dev
 ```
 
 Additional Make variables can be passed to `make dev` normally:
@@ -321,6 +329,13 @@ make test
 ```
 
 Unlike `make up` and `make dev`, `make test` does not start a long-running Odoo service. It starts a disposable Odoo container, returns Odoo's test exit code, and removes the container when the run finishes.
+
+Test mode uses Odoo `info` logging by default. Override it with `TEST_LOG_LEVEL` when investigating a failure:
+
+```bash
+TEST_LOG_LEVEL=debug make test
+TEST_LOG_LEVEL=debug_sql make test TEST_MODULES=my_sale
+```
 
 After pulling test-mode changes, rebuild the image once so the test runner is available:
 
@@ -443,13 +458,13 @@ When only `TEST_TAGS` is specified on a clean run, all local addons are still in
 Pass additional Odoo CLI options with `ARGS`. For example:
 
 ```bash
-make test ARGS='--log-level=test'
+make test ARGS='--test-file=/opt/local-addons/my_sale/tests/test_sale.py'
 ```
 
-or:
+For logging verbosity prefer the mode-specific variable instead of passing `--log-level` through `ARGS`:
 
 ```bash
-make test ARGS='--test-file=/opt/local-addons/my_sale/tests/test_sale.py'
+TEST_LOG_LEVEL=debug make test
 ```
 
 The runner itself owns the database, module installation, zero-worker and stop-after-init options. `ARGS` is intended for additional Odoo test/logging options rather than replacing those lifecycle controls.
