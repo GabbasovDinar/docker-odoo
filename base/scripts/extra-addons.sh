@@ -4,17 +4,8 @@ set -euo pipefail
 # -------------------- Defaults --------------------
 : "${TMP_ADDONS_DIR:=/tmp/getaddons}"
 
-: "${GITHUB_HOST:=github.com}"
-: "${GITLAB_HOST:=gitlab.com}"
-: "${GIT_HOST:=}" # generic git host
-
-: "${GITHUB_USER:=x-access-token}"
-: "${GITLAB_USER:=oauth2}"
-: "${GIT_USER:=oauth2}" # generic git user
-
-: "${GITHUB_TOKEN:=}"
-: "${GITLAB_TOKEN:=}"
-: "${GIT_TOKEN:=}" # generic git token
+# shellcheck source=base/scripts/git-auth.sh
+source /usr/local/lib/odoo/git-auth.sh
 
 ADDONS_FILE=""
 
@@ -51,65 +42,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# -------------------- Git non-interactive --------------------
-export GIT_TERMINAL_PROMPT=0
-export GIT_ASKPASS=/bin/true
-
-HOME_DIR="${HOME:-/root}"
-NETRC_PATH="${HOME_DIR}/.netrc"
-
-if [[ -n "${GIT_TOKEN:-}" && -z "${GIT_HOST:-}" ]]; then
-  echo "ERROR: --git-token provided but --git-host is empty." >&2
-  exit 2
-fi
-
-create_netrc() {
-  if [[ -z "${GITHUB_TOKEN:-}" && -z "${GITLAB_TOKEN:-}" && -z "${GIT_TOKEN:-}" ]]; then
-    echo "INFO: No Git tokens provided — assuming public repositories only." >&2
-    return 0
-  fi
-
-  local old_umask
-  old_umask=$(umask)
-  umask 077
-  : > "${NETRC_PATH}"
-
-  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    printf "machine %s login %s password %s\n" \
-      "${GITHUB_HOST}" "${GITHUB_USER}" "${GITHUB_TOKEN}" >>"${NETRC_PATH}"
-  fi
-
-  if [[ -n "${GITLAB_TOKEN:-}" ]]; then
-    printf "machine %s login %s password %s\n" \
-      "${GITLAB_HOST}" "${GITLAB_USER}" "${GITLAB_TOKEN}" >>"${NETRC_PATH}"
-  fi
-
-  if [[ -n "${GIT_TOKEN:-}" && -n "${GIT_HOST:-}" ]]; then
-    printf "machine %s login %s password %s\n" \
-      "${GIT_HOST}" "${GIT_USER}" "${GIT_TOKEN}" >>"${NETRC_PATH}"
-  fi
-
-  chmod 600 "${NETRC_PATH}"
-  umask "${old_umask}"
-  echo "INFO: .netrc created for Git authentication." >&2
-}
-
-cleanup_netrc() {
-  if [[ -f "${NETRC_PATH}" ]]; then
-    if command -v shred >/dev/null 2>&1; then
-      shred -u "${NETRC_PATH}" || rm -f "${NETRC_PATH}"
-    else
-      rm -f "${NETRC_PATH}"
-    fi
-  fi
-}
-
-trap cleanup_netrc EXIT
+# -------------------- Git authentication --------------------
+trap git_auth_cleanup EXIT
+git_auth_setup
 
 # -------------------- Prepare --------------------
-create_netrc
-unset GITHUB_TOKEN GITLAB_TOKEN GIT_TOKEN || true
-
 mkdir -p "$TMP_ADDONS_DIR" "$ADDONS_DIR"
 
 git config --global user.email >/dev/null 2>&1 || git config --global user.email "ci@example.com"
@@ -176,7 +113,7 @@ if [[ -s "${combined_reqs}" ]]; then
   echo "Installing Python libs from ${combined_reqs}"
   pip install --no-cache-dir -r "${combined_reqs}"
 else
-  echo "No Python dependencies found – skipping pip install"
+  echo "No Python dependencies found - skipping pip install"
 fi
 
 # -------------------- Cleanup --------------------
