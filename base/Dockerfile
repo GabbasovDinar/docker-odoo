@@ -4,88 +4,107 @@ ARG PYTHON_IMAGE=python:3.12-slim-bookworm
 
 FROM ${PYTHON_IMAGE} AS odoo-src
 
-# --- Odoo variables
-ARG ODOO_RC=/etc/odoo.conf
+SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
+ENV LANG=C.UTF-8
+
+# ---------------------------------------------------------------------------
+# Core system packages
+# ---------------------------------------------------------------------------
+
+RUN apt-get update -qq \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -qq --no-install-recommends \
+        curl \
+        python3-pip \
+        libldap2-dev \
+        libpq-dev \
+        libsasl2-dev \
+        rsync \
+        python3-dev \
+        python3-virtualenv \
+        build-essential \
+        gnupg \
+        npm \
+        git \
+        libxml2-dev \
+        libxslt1-dev \
+        libz-dev \
+        libxmlsec1-dev \
+        libcups2-dev \
+        swig \
+        libffi-dev \
+        pkg-config \
+        libcairo2-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# wkhtmltopdf drop-in client
+# ---------------------------------------------------------------------------
+
+ARG KWKHTMLTOPDF_CLIENT_REF=1.0
+
+RUN curl -fsSL \
+        "https://raw.githubusercontent.com/acsone/kwkhtmltopdf/${KWKHTMLTOPDF_CLIENT_REF}/client/python/kwkhtmltopdf_client.py" \
+        -o /usr/local/bin/wkhtmltopdf \
+    && chmod +x /usr/local/bin/wkhtmltopdf
+
+# ---------------------------------------------------------------------------
+# PostgreSQL client
+# ---------------------------------------------------------------------------
+
+    ARG POSTGRES_VERSION=16
+
+    RUN install -d -m 0755 /usr/share/keyrings \
+        && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | gpg --dearmor -o /usr/share/keyrings/postgres.gpg \
+        && echo \
+            "deb [signed-by=/usr/share/keyrings/postgres.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
+            > /etc/apt/sources.list.d/pgclient.list \
+        && apt-get update -qq \
+        && DEBIAN_FRONTEND=noninteractive apt-get install -qq --no-install-recommends \
+            postgresql-client-${POSTGRES_VERSION} \
+        && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# Node dependencies
+# ---------------------------------------------------------------------------
+
+RUN npm install -g rtlcss
+
+
+# ---------------------------------------------------------------------------
+# Python virtualenv
+# ---------------------------------------------------------------------------
+
+ENV VIRTUAL_ENV=/opt/odoo-venv
+
+RUN python3 -m venv "${VIRTUAL_ENV}"
+
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+
+# ---------------------------------------------------------------------------
+# Odoo Community source
+# ---------------------------------------------------------------------------
+
 ARG ODOO_DIR=/opt/odoo
-ARG ODOO_DATA_DIR=/var/lib/odoo
-ARG ODOO_LOG_DIR=/var/log/odoo
-ARG ADDONS_DIR=${ODOO_DIR}/addons
-ARG EXTRA_ADDONS_DIR=/opt/extra-addons
-ARG DOCKER_ODOO_UID=9999
-ARG DOCKER_ODOO_GID=9999
-# ce or ee
-ARG ODOO_EDITION=ce
-# Community source repository and branch/tag/full commit SHA.
+
 ARG ODOO_REPO=https://github.com/odoo/odoo.git
 ARG ODOO_REF=17.0
-# --- Git authentication variables
+
+# Git authentication configuration.
+# Actual tokens are passed only through BuildKit secrets below.
 ARG GIT_HOST=
 ARG GIT_USER=oauth2
 ARG GITHUB_HOST=github.com
 ARG GITLAB_HOST=gitlab.com
 ARG GITHUB_USER=x-access-token
 ARG GITLAB_USER=oauth2
-ARG ODOO_EE_VERSION=17.0
-ARG KWKHTMLTOPDF_CLIENT_REF=1.0
-# --- Enterprise variables
-ARG ODOO_EE_ADDONS_DIR=/opt/enterprise-addons
-ARG ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
-# Fallback build arg for manual builds. Prefer the BuildKit secret mount
-# "odoo_ee_git_token" configured in docker-compose.yml.
-ARG ODOO_EE_GIT_USER=x-access-token
-ARG ODOO_EE_GIT_TOKEN=
-ARG ODOO_EE_GIT_HOST=github.com
-# --- PostgreSQL variables
-ARG POSTGRES_VERSION=16
-# --- Target architecture
-ARG TARGETARCH
 
-SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-ENV LANG=C.UTF-8
-
-# --- Core system packages
-RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -qq --no-install-recommends curl python3-pip libldap2-dev libpq-dev libsasl2-dev rsync \
-    python3-dev python3-virtualenv build-essential gnupg npm git \
-    libxml2-dev \
-    libxslt1-dev \
-    libz-dev \
-    libxmlsec1-dev \
-    libcups2-dev \
-    swig \
-    libffi-dev \
-    pkg-config \
-    libcairo2-dev && \
-    rm -rf /var/lib/apt/lists/*
-
-# --- wkhtmltopdf drop-in client for the external kwkhtmltopdf service
-RUN curl -fsSL "https://raw.githubusercontent.com/acsone/kwkhtmltopdf/${KWKHTMLTOPDF_CLIENT_REF}/client/python/kwkhtmltopdf_client.py" \
-        -o /usr/local/bin/wkhtmltopdf \
-    && chmod +x /usr/local/bin/wkhtmltopdf
-
-# --- PostgreSQL client
-RUN install -d -m 0755 /usr/share/keyrings \
-    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-        | gpg --dearmor -o /usr/share/keyrings/postgres.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/postgres.gpg] http://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
-        > /etc/apt/sources.list.d/pgclient.list \
-    && apt-get update -qq \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -qq --no-install-recommends postgresql-client-${POSTGRES_VERSION} \
-    && rm -rf /var/lib/apt/lists/*
-
-# --- Node deps
-RUN npm install -g rtlcss
-
-# --- venv
-ENV VIRTUAL_ENV=/opt/odoo-venv
-RUN python3 -m venv $VIRTUAL_ENV
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# --- Source Odoo
-# Use normal Git so fetch depth is explicit and private HTTPS repositories can
-# reuse the same temporary .netrc authentication as extra addon repositories.
 COPY base/scripts/git-auth.sh /usr/local/lib/odoo/git-auth.sh
 COPY base/scripts/odoo-source.sh /usr/local/bin/odoo-source
+
 RUN chmod +x /usr/local/bin/odoo-source
+
 RUN --mount=type=secret,id=github_token,required=false \
     --mount=type=secret,id=gitlab_token,required=false \
     --mount=type=secret,id=git_token,required=false \
@@ -94,17 +113,46 @@ RUN --mount=type=secret,id=github_token,required=false \
     GIT_TOKEN="$(cat /run/secrets/git_token 2>/dev/null || true)" \
     /usr/local/bin/odoo-source
 
-# --- Install Odoo python requirements from the exact source checkout
-RUN pip install --no-cache-dir -r ${ODOO_DIR}/requirements.txt
+# ---------------------------------------------------------------------------
+# Odoo Python dependencies
+# ---------------------------------------------------------------------------
 
-# --- User
-RUN groupadd --gid ${DOCKER_ODOO_GID} odoo && useradd odoo -u ${DOCKER_ODOO_UID} -g ${DOCKER_ODOO_GID} -m -s /bin/bash
+RUN pip install --no-cache-dir \
+-r "${ODOO_DIR}/requirements.txt"
 
-# --- Install Odoo
-RUN pip install --no-cache-dir -e ${ODOO_DIR} --config-setting=editable-mode=compat
+# ---------------------------------------------------------------------------
+# Odoo system user
+# ---------------------------------------------------------------------------
 
-# --- Copy scripts and Odoo configuration files
-RUN mkdir -p /usr/local/share/odoo/tmpl /usr/local/share/odoo/manifests /run/odoo
+ARG DOCKER_ODOO_UID=9999
+ARG DOCKER_ODOO_GID=9999
+
+RUN groupadd --gid "${DOCKER_ODOO_GID}" odoo \
+    && useradd \
+        --uid "${DOCKER_ODOO_UID}" \
+        --gid "${DOCKER_ODOO_GID}" \
+        --create-home \
+        --shell /bin/bash \
+        odoo
+
+
+# ---------------------------------------------------------------------------
+# Install Odoo
+# ---------------------------------------------------------------------------
+
+RUN pip install --no-cache-dir \
+    -e "${ODOO_DIR}" \
+    --config-setting=editable-mode=compat
+
+
+# ---------------------------------------------------------------------------
+# Scripts and configuration
+# ---------------------------------------------------------------------------
+
+RUN mkdir -p \
+    /usr/local/share/odoo/tmpl \
+    /usr/local/share/odoo/manifests \
+    /run/odoo
 
 COPY base/scripts/wait-for-psql.py /usr/local/bin/wait-for-psql.py
 COPY base/scripts/odoorc.py         /usr/local/bin/odoorc.py
@@ -112,15 +160,40 @@ COPY base/scripts/odoo-debug.py     /usr/local/bin/odoo-debug.py
 COPY base/scripts/odoo-test.sh      /usr/local/bin/odoo-test
 COPY base/scripts/entrypoint.sh     /
 COPY base/scripts/extra-addons.sh   /
-COPY base/config/odoo.conf.tpl      /usr/local/share/odoo/tmpl/odoo.conf.tpl
-COPY base/manifests/enterprise.yml  /usr/local/share/odoo/manifests/enterprise.yml
 
-RUN chmod +x /usr/local/bin/wait-for-psql.py /usr/local/bin/wkhtmltopdf /usr/local/bin/odoo-debug.py /usr/local/bin/odoo-test /entrypoint.sh /extra-addons.sh && chown -R odoo:odoo /run/odoo
+COPY base/config/odoo.conf.tpl \
+    /usr/local/share/odoo/tmpl/odoo.conf.tpl
 
-# --- Create base odoo config file
-RUN printf "[options]\ndata_dir = %s\n" "${ODOO_DATA_DIR}" > "${ODOO_RC}" && chown odoo:odoo "${ODOO_RC}"
+COPY base/manifests/enterprise.yml \
+    /usr/local/share/odoo/manifests/enterprise.yml
 
-# --- Create directories for extra addons and filestore, set ownership to `odoo`
+RUN chmod +x \
+        /usr/local/bin/wait-for-psql.py \
+        /usr/local/bin/wkhtmltopdf \
+        /usr/local/bin/odoo-debug.py \
+        /usr/local/bin/odoo-test \
+        /entrypoint.sh \
+        /extra-addons.sh \
+    && chown -R odoo:odoo /run/odoo
+
+# ---------------------------------------------------------------------------
+# Odoo filesystem/configuration
+# ---------------------------------------------------------------------------
+
+ARG ODOO_RC=/etc/odoo.conf
+ARG ODOO_DATA_DIR=/var/lib/odoo
+ARG ODOO_LOG_DIR=/var/log/odoo
+
+ARG ADDONS_DIR=${ODOO_DIR}/addons
+ARG EXTRA_ADDONS_DIR=/opt/extra-addons
+ARG ODOO_EE_ADDONS_DIR=/opt/enterprise-addons
+
+RUN printf \
+        "[options]\ndata_dir = %s\n" \
+        "${ODOO_DATA_DIR}" \
+        > "${ODOO_RC}" \
+    && chown odoo:odoo "${ODOO_RC}"
+
 ENV ODOO_RC=${ODOO_RC} \
     ODOO_RC_TEMPLATE=/usr/local/share/odoo/tmpl/odoo.conf.tpl \
     ODOO_LOG_DIR=${ODOO_LOG_DIR} \
@@ -132,36 +205,65 @@ ENV ODOO_RC=${ODOO_RC} \
     TMP_ADDONS_DIR=/tmp/getaddons \
     HOME=${ODOO_DATA_DIR}
 
-RUN mkdir -p "${ODOO_DATA_DIR}" "${EXTRA_ADDONS_DIR}" "${ODOO_EE_ADDONS_DIR}" "${ADDONS_DIR}" "${ODOO_LOG_DIR}" "${TMP_ADDONS_DIR}" \
-    && chown -R odoo:odoo "${ODOO_DATA_DIR}" "${EXTRA_ADDONS_DIR}" "${ODOO_EE_ADDONS_DIR}" "${ADDONS_DIR}" "${ODOO_LOG_DIR}"
+RUN mkdir -p \
+        "${ODOO_DATA_DIR}" \
+        "${EXTRA_ADDONS_DIR}" \
+        "${ODOO_EE_ADDONS_DIR}" \
+        "${ADDONS_DIR}" \
+        "${ODOO_LOG_DIR}" \
+        "${TMP_ADDONS_DIR}" \
+    && chown -R odoo:odoo \
+        "${ODOO_DATA_DIR}" \
+        "${EXTRA_ADDONS_DIR}" \
+        "${ODOO_EE_ADDONS_DIR}" \
+        "${ADDONS_DIR}" \
+        "${ODOO_LOG_DIR}"
 
-# Install tools needed for extra addons and odoo enterprise installation
+
+# ---------------------------------------------------------------------------
+# Tools required for extra addons / Enterprise installation
+# ---------------------------------------------------------------------------
+
 COPY base/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
 
-# Install Odoo EE
+RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm -f /tmp/requirements.txt
+
+# ---------------------------------------------------------------------------
+# Odoo Enterprise
+# ---------------------------------------------------------------------------
+
+ARG ODOO_EDITION=ce
+
+ARG ODOO_EE_VERSION=17.0
 ARG ODOO_ENTERPRISE_REF=${ODOO_EE_VERSION}
+
+ARG ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
+
+ARG ODOO_EE_GIT_USER=x-access-token
+ARG ODOO_EE_GIT_HOST=github.com
+
 RUN --mount=type=secret,id=odoo_ee_git_token,required=false \
-    if [ "$ODOO_EDITION" = "ee" ]; then \
-      if [ -f /run/secrets/odoo_ee_git_token ]; then \
-        ODOO_EE_GIT_TOKEN="$(cat /run/secrets/odoo_ee_git_token)"; \
-      fi; \
-      echo "Installing Odoo Enterprise..." && \
-      /extra-addons.sh \
-          --addons-file=/usr/local/share/odoo/manifests/enterprise.yml \
-          --addons-dir="${ODOO_EE_ADDONS_DIR}" \
-          --git-user="${ODOO_EE_GIT_USER}" \
-          --git-token="${ODOO_EE_GIT_TOKEN}" \
-          --git-host="${ODOO_EE_GIT_HOST}"; \
+    if [ "${ODOO_EDITION}" = "ee" ]; then \
+        ODOO_EE_GIT_TOKEN="$(cat /run/secrets/odoo_ee_git_token 2>/dev/null || true)"; \
+        echo "Installing Odoo Enterprise..."; \
+        /extra-addons.sh \
+            --addons-file=/usr/local/share/odoo/manifests/enterprise.yml \
+            --addons-dir="${ODOO_EE_ADDONS_DIR}" \
+            --git-user="${ODOO_EE_GIT_USER}" \
+            --git-token="${ODOO_EE_GIT_TOKEN}" \
+            --git-host="${ODOO_EE_GIT_HOST}"; \
     fi
 
-# Expose filestore
+
+# ---------------------------------------------------------------------------
+# Runtime
+# ---------------------------------------------------------------------------
+
 VOLUME ["${ODOO_DATA_DIR}"]
 
-# Expose Odoo services
 EXPOSE 8069 8071 8072
 
-# Set default user when running the container
 USER odoo
 
 ENTRYPOINT ["/entrypoint.sh"]
