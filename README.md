@@ -123,6 +123,7 @@ For the normal workflow:
 - `make pull` pulls runtime images.
 - `make up` starts the stack in the normal runtime mode.
 - `make dev` starts the stack in development mode with `debugpy`, Odoo development helpers and zero workers.
+- `make test` runs tests for installable modules under `local-addons/` in one-shot test mode.
 - `make start` is an alias for `make up`.
 - `make ps` shows service status.
 - `make logs` follows logs from the full stack.
@@ -308,6 +309,184 @@ The dev Compose file publishes debugpy only on `127.0.0.1`. Do not publish the d
 ### Odoo shell in dev mode
 
 `make odoo-shell MODE=dev` continues to run as a normal Odoo shell and does not try to open another debugpy listener. This avoids a port collision with the already running debug server.
+
+## Test Mode
+
+Test mode is a one-shot Odoo test runner for addons mounted under `local-addons/`. It is based on the same two-phase idea used by OCA CI: dependencies are installed first without running their tests, then the selected local addons are installed with Odoo's native test runner enabled.
+
+Test mode uses `docker-compose.test.yml` and `MODE=test`. The public entrypoint is:
+
+```bash
+make test
+```
+
+Unlike `make up` and `make dev`, `make test` does not start a long-running Odoo service. It starts a disposable Odoo container, returns Odoo's test exit code, and removes the container when the run finishes.
+
+After pulling test-mode changes, rebuild the image once so the test runner is available:
+
+```bash
+make init
+```
+
+Check the resolved test Compose configuration with:
+
+```bash
+make env MODE=test
+```
+
+The output includes:
+
+```text
+-f docker-compose.yml -f docker-compose.test.yml
+```
+
+### Default clean-database run
+
+With no test parameters:
+
+```bash
+make test
+```
+
+the runner:
+
+1. uses `manifestoo` to find every installable addon under `/opt/local-addons`;
+2. resolves their declared Odoo dependencies;
+3. creates a uniquely named empty PostgreSQL database such as `odoo_test_20260819_123456_12345`;
+4. initializes the database and installs dependencies with demo data disabled and tests disabled;
+5. installs the selected local addons with `--test-enable` so Odoo runs their `at_install` and `post_install` tests;
+6. runs with zero workers and zero cron workers, then exits with the Odoo test status;
+7. drops the generated database and its filestore when the run succeeds.
+
+This separation is intentional: dependency modules are needed for installation, but the default goal is to test the project modules from `local-addons/`, not every dependency's own test suite.
+
+If no installable addon is found under `local-addons/`, the command exits successfully without creating a database.
+
+### Failed test database lifecycle
+
+A generated test database is deleted automatically only after a successful run.
+
+If installation or tests fail, the generated database is preserved for inspection and its name is printed. The next plain:
+
+```bash
+make test
+```
+
+still creates a new clean database. This is the recommended way to reproduce a failure because every normal run starts from the same clean state instead of inheriting mutations from a failed run.
+
+When useful for investigation, run against the preserved database explicitly:
+
+```bash
+make test TEST_DB=odoo_test_20260819_123456_12345
+```
+
+A preserved database may represent a partially failed installation, so reuse is primarily a debugging tool; use a fresh run for reproducibility.
+
+To preserve even successful generated databases:
+
+```bash
+make test TEST_KEEP_DB=1
+```
+
+To always remove a generated database after a failed run:
+
+```bash
+make test TEST_DROP_FAILED_DB=1
+```
+
+### Run only specific local modules
+
+Use `TEST_MODULES` to limit which addons from `local-addons/` are installed and tested:
+
+```bash
+make test TEST_MODULES=my_sale,my_stock
+```
+
+`TEST_MODULES` is a comma-separated list. Every requested name must be an installable addon found under `local-addons/`. Dependencies are still resolved and installed automatically.
+
+Use `TEST_MODULES` when you want to reduce the installation scope. Use `TEST_TAGS` when you want to filter which tests Odoo executes.
+
+### Odoo test tags
+
+`TEST_TAGS` is passed directly to Odoo's `--test-tags` option, so normal Odoo test selectors can be used.
+
+Test one module:
+
+```bash
+make test TEST_TAGS='/my_sale'
+```
+
+Combine Odoo tags:
+
+```bash
+make test TEST_TAGS='standard,-slow'
+```
+
+Select a class or method:
+
+```bash
+make test TEST_TAGS='/my_sale:TestSale.test_confirm'
+```
+
+Limit both installation and test selection:
+
+```bash
+make test \
+  TEST_MODULES=my_sale \
+  TEST_TAGS='/my_sale:TestSale.test_confirm'
+```
+
+When only `TEST_TAGS` is specified on a clean run, all local addons are still installed; the tags filter test execution. Add `TEST_MODULES` as well when installation should also be limited.
+
+### Additional Odoo test arguments
+
+Pass additional Odoo CLI options with `ARGS`. For example:
+
+```bash
+make test ARGS='--log-level=test'
+```
+
+or:
+
+```bash
+make test ARGS='--test-file=/opt/local-addons/my_sale/tests/test_sale.py'
+```
+
+The runner itself owns the database, module installation, zero-worker and stop-after-init options. `ARGS` is intended for additional Odoo test/logging options rather than replacing those lifecycle controls.
+
+### Run tests on an existing database
+
+To run tests against an existing database:
+
+```bash
+make test TEST_DB=my_test_database
+```
+
+For an already initialized Odoo database, test mode does not install or upgrade modules. It finds which selected local addons are already installed and runs their tests using Odoo module test-tag selectors. If `TEST_TAGS` is provided, that expression is passed to Odoo instead.
+
+To require a specific installed local addon:
+
+```bash
+make test \
+  TEST_DB=my_test_database \
+  TEST_MODULES=my_sale
+```
+
+If an addon explicitly listed in `TEST_MODULES` is not installed in that database, the command fails instead of modifying the database automatically.
+
+If `TEST_DB` exists but is an empty, uninitialized PostgreSQL database, the normal initialization/install/test flow is used, but the explicitly supplied database is never deleted automatically.
+
+Testing an existing database is not isolated. Do not point this mode at a production database; use a disposable copy or a dedicated test/staging database.
+
+### External PostgreSQL
+
+The default clean test mode must be able to create and drop temporary databases. When `DB_HOST` points to an external PostgreSQL server, the configured `DB_USER` therefore needs `CREATEDB` (or equivalent database-management privileges):
+
+```sql
+ALTER ROLE odoo CREATEDB;
+```
+
+When `TEST_DB` points to an existing initialized database, automatic database creation and deletion are not used.
 
 ## Odoo CE / EE
 
@@ -1110,6 +1289,9 @@ Verify the configured target environment before running restore because it is de
 ## References
 
 - [Odoo 17 documentation](https://www.odoo.com/documentation/17.0/)
+- [Odoo 17 testing documentation](https://www.odoo.com/documentation/17.0/developer/reference/backend/testing.html)
+- [OCA/oca-ci](https://github.com/OCA/oca-ci)
+- [manifestoo](https://github.com/acsone/manifestoo)
 - [OCA/OpenUpgrade](https://github.com/OCA/OpenUpgrade)
 - [git-aggregator](https://github.com/acsone/git-aggregator)
 - [Docker Compose CLI reference](https://docs.docker.com/engine/reference/commandline/compose/)
