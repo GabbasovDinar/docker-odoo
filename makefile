@@ -1,6 +1,7 @@
 ENV_FILE ?= .env
 COMPOSE_PROJECT_NAME ?= docker-odoo
-COMPOSE_FILES ?= -f docker-compose.yml
+MODE ?= prod
+COMPOSE_FILES ?= -f docker-compose.yml $(if $(filter dev,$(MODE)),-f docker-compose.dev.yml)
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -31,11 +32,12 @@ check-env:
 
 .PHONY: help
 help: ## Show available targets
-	@printf "Usage: make <target> [ENV_FILE=.env] [COMPOSE_PROJECT_NAME=docker-odoo]\n\n"
+	@printf "Usage: make <target> [MODE=prod|dev] [ENV_FILE=.env] [COMPOSE_PROJECT_NAME=docker-odoo]\n\n"
 	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_.-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
 .PHONY: env
 env: ## Show the resolved make/compose environment
+	@printf "MODE=%s\n" "$(MODE)"
 	@printf "ENV_FILE=%s\n" "$(ENV_FILE)"
 	@printf "COMPOSE_PROJECT_NAME=%s\n" "$(COMPOSE_PROJECT_NAME)"
 	@printf "COMPOSE_FILES=%s\n" "$(COMPOSE_FILES)"
@@ -65,6 +67,10 @@ pull: check-env ## Pull runtime images
 .PHONY: up
 up: check-env ## Start the stack
 	$(COMPOSE) up -d
+
+.PHONY: dev
+dev: MODE=dev
+dev: up ## Start the stack in development mode
 
 .PHONY: migrate
 migrate: check-env ## Run OpenUpgrade once and overwrite migration.log

@@ -1,0 +1,10 @@
+services:
+  odoo:
+    environment:
+      MODE: dev
+      DEV_MODE: ${DEV_MODE:-all}
+      DEBUGPY_HOST: 0.0.0.0
+      DEBUGPY_PORT: ${DEBUGPY_PORT:-5678}
+      DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-0}
+    ports:
+      - "127.0.0.1:${DEBUGPY_PORT:-5678}:${DEBUGPY_PORT:-5678}"

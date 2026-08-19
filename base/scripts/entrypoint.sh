@@ -456,6 +456,13 @@ case "$1" in
     cleanup_filesystem_sessions_for_redis
     run_openupgrade_if_enabled
     start_odoo_url_parameter_sync
+    if [[ "${MODE:-prod}" == "dev" ]]; then
+      exec python /usr/local/bin/odoo-debug.py \
+        -c "${ODOO_RC}" \
+        "$@" \
+        --dev="${DEV_MODE:-all}" \
+        --workers=0
+    fi
     exec odoo -c "${ODOO_RC}" "$@"
     ;;
   --)
