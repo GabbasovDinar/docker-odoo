@@ -3,6 +3,7 @@ services:
     environment:
       MODE: dev
       DEV_MODE: ${DEV_MODE:-all}
+      LOG_LEVEL: ${DEV_LOG_LEVEL:-debug}
       DEBUGPY_HOST: 0.0.0.0
       DEBUGPY_PORT: ${DEBUGPY_PORT:-5678}
       DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-0}

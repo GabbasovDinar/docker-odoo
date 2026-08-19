@@ -1,7 +1,7 @@
 ENV_FILE ?= .env
 COMPOSE_PROJECT_NAME ?= docker-odoo
 MODE ?= prod
-COMPOSE_FILES ?= -f docker-compose.yml $(if $(filter dev,$(MODE)),-f docker-compose.dev.yml)
+COMPOSE_FILES ?= -f docker-compose.yml $(if $(filter dev,$(MODE)),-f docker-compose.dev.yml) $(if $(filter test,$(MODE)),-f docker-compose.test.yml)
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -17,6 +17,12 @@ WKHTMLTOPDF_SERVICE ?= kwkhtmltopdf
 REDIS_SERVICE ?= redis
 
 COMPOSE = COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) ENV_FILE=$(ENV_FILE) docker compose --env-file $(ENV_FILE) $(COMPOSE_FILES)
+TEST_RUN_ENV = \
+	-e ODOO_TEST_DB="$(TEST_DB)" \
+	-e ODOO_TEST_MODULES="$(TEST_MODULES)" \
+	-e ODOO_TEST_TAGS="$(TEST_TAGS)" \
+	-e ODOO_TEST_KEEP_DB="$(TEST_KEEP_DB)" \
+	-e ODOO_TEST_DROP_FAILED_DB="$(TEST_DROP_FAILED_DB)"
 
 .PHONY: check-env
 check-env:
@@ -32,7 +38,7 @@ check-env:
 
 .PHONY: help
 help: ## Show available targets
-	@printf "Usage: make <target> [MODE=prod|dev] [ENV_FILE=.env] [COMPOSE_PROJECT_NAME=docker-odoo]\n\n"
+	@printf "Usage: make <target> [MODE=prod|dev|test] [ENV_FILE=.env] [COMPOSE_PROJECT_NAME=docker-odoo]\n\n"
 	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_.-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
 .PHONY: env
@@ -68,9 +74,19 @@ pull: check-env ## Pull runtime images
 up: check-env ## Start the stack
 	$(COMPOSE) up -d
 
+.PHONY: prod
+prod: MODE=prod
+prod: up ## Start the stack in production mode
+
 .PHONY: dev
 dev: MODE=dev
 dev: up ## Start the stack in development mode
+
+.PHONY: test
+test: MODE=test
+test: check-env ## Run tests for local addons
+test:
+	$(COMPOSE) run --rm $(TEST_RUN_ENV) $(ADDONS_SERVICE) odoo-test $(ARGS)
 
 .PHONY: migrate
 migrate: check-env ## Run OpenUpgrade once and overwrite migration.log
