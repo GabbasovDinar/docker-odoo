@@ -15,9 +15,9 @@ ARG DOCKER_ODOO_UID=9999
 ARG DOCKER_ODOO_GID=9999
 # ce or ee
 ARG ODOO_EDITION=ce
-# CE or EE version or tags
-ARG ODOO_CE_VERSION=17.0
-ARG ODOO_CE_REF=
+# Community source repository and branch/tag/full commit SHA.
+ARG ODOO_REPO=https://github.com/odoo/odoo.git
+ARG ODOO_REF=17.0
 ARG ODOO_EE_VERSION=17.0
 ARG KWKHTMLTOPDF_CLIENT_REF=1.0
 # --- Enterprise variables
@@ -73,22 +73,16 @@ ENV VIRTUAL_ENV=/opt/odoo-venv
 RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
-# --- Install odoo python requirements
-RUN ODOO_SOURCE_HEAD="${ODOO_CE_REF:-${ODOO_CE_VERSION}}" \
-    && curl -fsSL "https://raw.githubusercontent.com/odoo/odoo/${ODOO_SOURCE_HEAD}/requirements.txt" -o /tmp/odoo-req.txt \
-    && pip install --no-cache-dir -r /tmp/odoo-req.txt \
-    && rm -f /tmp/odoo-req.txt
+# --- Source Odoo
+# BuildKit clones the selected Git source directly. GIT_AUTH_TOKEN or
+# GIT_AUTH_HEADER build secrets are used automatically for private HTTPS repos.
+ADD ${ODOO_REPO}#${ODOO_REF} ${ODOO_DIR}/
+
+# --- Install Odoo python requirements from the exact source checkout
+RUN pip install --no-cache-dir -r ${ODOO_DIR}/requirements.txt
 
 # --- User
 RUN groupadd --gid ${DOCKER_ODOO_GID} odoo && useradd odoo -u ${DOCKER_ODOO_UID} -g ${DOCKER_ODOO_GID} -m -s /bin/bash
-
-# --- Source Odoo
-ARG ODOO_HEAD=
-RUN mkdir /tmp/getodoo \
-    && ODOO_SOURCE_HEAD="${ODOO_HEAD:-${ODOO_CE_REF:-${ODOO_CE_VERSION}}}" \
-    && (curl -fsSL "https://github.com/odoo/odoo/tarball/${ODOO_SOURCE_HEAD}" | tar -C /tmp/getodoo -xz) \
-    && mv /tmp/getodoo/* ${ODOO_DIR} \
-    && rmdir /tmp/getodoo
 
 # --- Install Odoo
 RUN pip install --no-cache-dir -e ${ODOO_DIR} --config-setting=editable-mode=compat
