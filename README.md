@@ -37,7 +37,7 @@ Required env values before first real use:
 
 Optional but often needed:
 
-- `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GIT_TOKEN` for private addon repositories
+- `GITHUB_TOKEN`, `GITLAB_TOKEN`, `GIT_TOKEN` for private Odoo source or addon repositories
 - `ODOO_EE_GIT_TOKEN` for Odoo Enterprise builds
 
 ## Minimum Setup
@@ -518,9 +518,9 @@ When `TEST_DB` points to an existing initialized database, automatic database cr
 
 ## Odoo Source and CE / EE
 
-The base image fetches the Odoo Community source directly from Git with Docker BuildKit `ADD`. The source repository and revision are independent from the Docker image tag, so the build can use the official upstream repository, a fork, a self-hosted GitLab repository, a branch, a tag, or a pinned commit without changing `base/Dockerfile`.
+The base image fetches the Odoo Community source with normal Git using an explicit shallow fetch (`git fetch --depth=1 --no-tags`). The source repository and revision are independent from the Docker image tag, so the build can use the official upstream repository, a fork, a self-hosted GitLab repository, a branch, a tag, or a pinned commit without changing `base/Dockerfile`.
 
-The default configuration preserves the existing behavior and builds Odoo 17 from the official GitHub repository:
+The default configuration builds Odoo 17 from the official GitHub repository:
 
 ```env
 ODOO_EDITION=ce
@@ -554,11 +554,11 @@ Then rebuild the base and project images:
 make init
 ```
 
-The selected checkout becomes `/opt/odoo`. Odoo Python requirements are installed from `/opt/odoo/requirements.txt`, so source code and requirements always come from the same revision.
+The selected checkout becomes `/opt/odoo`. Odoo Python requirements are installed from `/opt/odoo/requirements.txt`, so source code and requirements always come from the same revision. Git metadata is removed after checkout because the runtime image does not need repository history.
 
 ### Pin Odoo to a commit
 
-For reproducible builds, set `ODOO_REF` to a full 40-character Git commit SHA:
+For reproducible builds, set `ODOO_REF` to the full 40-character Git commit SHA:
 
 ```env
 ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
@@ -566,7 +566,7 @@ ODOO_BRANCH=17.0
 ODOO_REF=0123456789abcdef0123456789abcdef01234567
 ```
 
-A pinned `ODOO_REF` overrides `ODOO_BRANCH`. Clear `ODOO_REF` to follow the configured branch again. BuildKit Git URL fragments require the full commit hash rather than a shortened SHA.
+A pinned `ODOO_REF` overrides `ODOO_BRANCH`. Clear `ODOO_REF` to follow the configured branch again. A full commit SHA is recommended for an immutable production build; branches and tags remain supported for normal development and release workflows.
 
 Rebuild after changing the source repository or ref:
 
@@ -583,47 +583,59 @@ make init
 
 ### Private Odoo repository over HTTPS
 
-Private Odoo source authentication is handled by BuildKit itself while processing the Dockerfile `ADD`. This happens outside normal `RUN git ...` commands, so container `.netrc` files and the `GITHUB_TOKEN` / `GITLAB_TOKEN` variables used by the addon `git-aggregator` flow do not automatically authenticate the Odoo source fetch.
+Odoo source authentication now uses the same mechanism as private addon repositories. The build mounts `GITHUB_TOKEN`, `GITLAB_TOKEN`, and `GIT_TOKEN` as BuildKit secrets. The source helper creates a temporary `~/.netrc`, performs the shallow Git fetch, and removes the `.netrc` before the build step finishes. Tokens are not passed as Dockerfile build arguments or persisted in image layers.
 
-The project exposes two BuildKit pre-flight secrets for this purpose. Set only one of them.
-
-For private GitHub repositories, and for GitLab personal/project access tokens where any non-empty Git username is accepted, set a token directly:
+For a private self-hosted GitLab repository using a Personal Access Token or Project Access Token:
 
 ```env
 ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
 ODOO_BRANCH=17.0
 ODOO_REF=0123456789abcdef0123456789abcdef01234567
-ODOO_GIT_AUTH_TOKEN=glpat-xxxxxxxxxxxxxxxx
-ODOO_GIT_AUTH_HEADER=
+
+GITLAB_HOST=gitlab.my.com
+GITLAB_USER=oauth2
+GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxx
 ```
 
-Compose passes `ODOO_GIT_AUTH_TOKEN` to BuildKit using the predefined secret ID `GIT_AUTH_TOKEN`. BuildKit uses `x-access-token` as the HTTPS username. GitLab personal and project access tokens accept any non-empty username for Git-over-HTTPS authentication; the token needs repository read access.
+For GitLab Personal Access Tokens and Project Access Tokens the username only needs to be non-empty, so the default `oauth2` value is suitable. Give the token only the repository access required by the build, normally `read_repository`.
 
-For credentials that require a specific username, such as a GitLab deploy token or CI job token, use a raw HTTP Basic authorization header instead. Generate the Base64 payload without a newline:
-
-```bash
-printf '%s' 'gitlab+deploy-token-123:YOUR_DEPLOY_TOKEN' | base64 -w0
-```
-
-Then put the result in the env file:
+If a credential requires a specific username, put that username in `GITLAB_USER`. For example, a deploy token can use:
 
 ```env
-ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
-ODOO_BRANCH=17.0
-ODOO_REF=0123456789abcdef0123456789abcdef01234567
-ODOO_GIT_AUTH_TOKEN=
-ODOO_GIT_AUTH_HEADER=Basic BASE64_USERNAME_AND_TOKEN
+GITLAB_HOST=gitlab.my.com
+GITLAB_USER=gitlab+deploy-token-123
+GITLAB_TOKEN=YOUR_DEPLOY_TOKEN
 ```
 
-For a GitLab CI job token the username is normally `gitlab-ci-token`, so the same pattern applies:
+A GitLab CI job token can use:
 
-```bash
-printf '%s' 'gitlab-ci-token:YOUR_CI_JOB_TOKEN' | base64 -w0
+```env
+GITLAB_HOST=gitlab.my.com
+GITLAB_USER=gitlab-ci-token
+GITLAB_TOKEN=${CI_JOB_TOKEN}
 ```
 
-Both values are provided to the build as Docker build secrets rather than Dockerfile `ARG` or `ENV` values, so they are not baked into image layers. The local `.env` still contains the secret value and must never be committed.
+For a private GitHub repository:
 
-If authentication fails, first verify the repository URL, token scope, and that the configured credential can clone the repository over HTTPS. For GitLab, a read-only token should have repository read permission such as `read_repository`.
+```env
+ODOO_REPO=https://github.com/my-company/odoo.git
+GITHUB_HOST=github.com
+GITHUB_USER=x-access-token
+GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxx
+```
+
+For another HTTPS Git host, use the generic credentials:
+
+```env
+ODOO_REPO=https://git.example.com/odoo/odoo.git
+GIT_HOST=git.example.com
+GIT_USER=oauth2
+GIT_TOKEN=xxxxxxxxxxxxxxxx
+```
+
+The same `GITHUB_*`, `GITLAB_*`, and generic `GIT_*` credentials are also available to the addon repository build, so there is no separate Odoo Community authentication configuration anymore. The local `.env` still contains secret values and must never be committed.
+
+SSH agent/key forwarding is intentionally not configured for the Odoo Community source flow in this project. Use an HTTPS repository URL when the source repository is private.
 
 ### Enterprise Edition
 
@@ -1421,7 +1433,7 @@ Verify the configured target environment before running restore because it is de
 
 - [Odoo 17 documentation](https://www.odoo.com/documentation/17.0/)
 - [Odoo 17 testing documentation](https://www.odoo.com/documentation/17.0/developer/reference/backend/testing.html)
-- [Dockerfile `ADD` reference](https://docs.docker.com/reference/dockerfile/#add)
+- [Git fetch documentation](https://git-scm.com/docs/git-fetch)
 - [Docker build secrets](https://docs.docker.com/build/building/secrets/)
 - [OCA/oca-ci](https://github.com/OCA/oca-ci)
 - [manifestoo](https://github.com/acsone/manifestoo)
