@@ -83,6 +83,7 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 # --- Source Odoo
 # Use normal Git so fetch depth is explicit and private HTTPS repositories can
 # reuse the same temporary .netrc authentication as extra addon repositories.
+COPY base/scripts/git-auth.sh /usr/local/lib/odoo/git-auth.sh
 COPY base/scripts/odoo-source.sh /usr/local/bin/odoo-source
 RUN chmod +x /usr/local/bin/odoo-source
 RUN --mount=type=secret,id=github_token,required=false \
