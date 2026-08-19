@@ -734,7 +734,7 @@ DB_USER=odoo
 DB_PASSWORD=CHANGE_ME_DB_PASSWORD
 ```
 
-To use PostgreSQL on another VM or server, point `DB_HOST` at that server:
+To use PostgreSQL on another VM or server, point `DB_HOST` to that server:
 
 ```env
 DB_HOST=10.20.0.15
@@ -781,7 +781,7 @@ OPENUPGRADE_TARGET_DATABASE_NAME
 migrated target database
 ```
 
-Example for `16.0 -> 17.0`:
+Example for `16 -> 17`:
 
 ```env
 ODOO_VERSION=17.0
@@ -1428,5 +1428,5 @@ Verify the configured target environment before running restore because it is de
 - [OCA/OpenUpgrade](https://github.com/OCA/OpenUpgrade)
 - [git-aggregator](https://github.com/acsone/git-aggregator)
 - [Docker Compose CLI reference](https://docs.docker.com/engine/reference/commandline/compose/)
-- [Caddy documentation](https://caddyserver.com/docs/)
+- [Caddy documentation](https://docs.caddyserver.com/docs/)
 - [kwkhtmltopdf](https://github.com/acsone/kwkhtmltopdf)
