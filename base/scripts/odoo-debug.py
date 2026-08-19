@@ -3,6 +3,8 @@
 import os
 import sys
 
+os.environ["TZ"] = "UTC"
+
 import debugpy
 
 
