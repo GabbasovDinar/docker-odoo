@@ -99,12 +99,13 @@ if is_true "${OPENUPGRADE:-False}"; then
   export OPENUPGRADE_TARGET_DATABASE_NAME
   export DB_NAME="${OPENUPGRADE_TARGET_DATABASE_NAME}"
   export DATABASE_NAME="${OPENUPGRADE_TARGET_DATABASE_NAME}"
-  export DBFILTER="$(python - "${OPENUPGRADE_TARGET_DATABASE_NAME}" <<'PY'
+  DBFILTER="$(python - "${OPENUPGRADE_TARGET_DATABASE_NAME}" <<'PY'
 import re
 import sys
 print(f"^{re.escape(sys.argv[1])}$")
 PY
 )"
+  export DBFILTER
 fi
 
 # --- Render odoo.conf (drop-unresolved)
