@@ -5,10 +5,12 @@ services:
       context: .
       dockerfile: base/Dockerfile
       secrets:
-        - source: odoo_git_auth_token
-          target: GIT_AUTH_TOKEN
-        - source: odoo_git_auth_header
-          target: GIT_AUTH_HEADER
+        - source: github_token
+          target: github_token
+        - source: gitlab_token
+          target: gitlab_token
+        - source: git_token
+          target: git_token
         - source: odoo_ee_git_token
           target: odoo_ee_git_token
       args:
@@ -18,6 +20,14 @@ services:
         # ODOO_CE_REF/ODOO_CE_VERSION are retained as compatibility fallbacks for existing env files.
         ODOO_REPO: ${ODOO_REPO:-https://github.com/odoo/odoo.git}
         ODOO_REF: ${ODOO_REF:-${ODOO_CE_REF:-${ODOO_BRANCH:-${ODOO_CE_VERSION:-${ODOO_VERSION:-17.0}}}}}
+
+        # Git authentication shared with the addon repository build.
+        GIT_HOST: ${GIT_HOST:-}
+        GIT_USER: ${GIT_USER:-oauth2}
+        GITHUB_HOST: ${GITHUB_HOST:-github.com}
+        GITLAB_HOST: ${GITLAB_HOST:-gitlab.com}
+        GITHUB_USER: ${GITHUB_USER:-x-access-token}
+        GITLAB_USER: ${GITLAB_USER:-oauth2}
 
         # For Enterprise private repository authentication
         ODOO_EE_GIT_USER: ${ODOO_EE_GIT_USER:-${GITHUB_USER:-x-access-token}}
@@ -193,10 +203,6 @@ networks:
   reports:
 
 secrets:
-  odoo_git_auth_token:
-    environment: ODOO_GIT_AUTH_TOKEN
-  odoo_git_auth_header:
-    environment: ODOO_GIT_AUTH_HEADER
   odoo_ee_git_token:
     environment: ODOO_EE_GIT_TOKEN
   github_token:
