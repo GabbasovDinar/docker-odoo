@@ -1,6 +1,12 @@
 ENV_FILE ?= .env
 COMPOSE_PROJECT_NAME ?= docker-odoo
+MODE ?= prod
+
+ifeq ($(MODE),dev)
+COMPOSE_FILES ?= -f docker-compose.yml -f docker-compose.dev.yml
+else
 COMPOSE_FILES ?= -f docker-compose.yml
+endif
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -31,11 +37,12 @@ check-env:
 
 .PHONY: help
 help: ## Show available targets
-	@printf "Usage: make <target> [ENV_FILE=.env] [COMPOSE_PROJECT_NAME=docker-odoo]\n\n"
+	@printf "Usage: make <target> [MODE=prod|dev] [ENV_FILE=.env] [COMPOSE_PROJECT_NAME=docker-odoo]\n\n"
 	@awk 'BEGIN {FS = ":.*?## "}; /^[a-zA-Z0-9_.-]+:.*?## / {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort
 
 .PHONY: env
 env: ## Show the resolved make/compose environment
+	@printf "MODE=%s\n" "$(MODE)"
 	@printf "ENV_FILE=%s\n" "$(ENV_FILE)"
 	@printf "COMPOSE_PROJECT_NAME=%s\n" "$(COMPOSE_PROJECT_NAME)"
 	@printf "COMPOSE_FILES=%s\n" "$(COMPOSE_FILES)"
