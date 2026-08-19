@@ -74,6 +74,10 @@ pull: check-env ## Pull runtime images
 up: check-env ## Start the stack
 	$(COMPOSE) up -d
 
+.PHONY: prod
+prod: MODE=prod
+prod: up ## Start the stack in production mode
+
 .PHONY: dev
 dev: MODE=dev
 dev: up ## Start the stack in development mode
