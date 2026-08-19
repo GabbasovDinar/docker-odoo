@@ -3,10 +3,9 @@
 import os
 import sys
 
-os.environ["TZ"] = "UTC"
-
 import debugpy
 
+os.environ["TZ"] = "UTC"
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 
