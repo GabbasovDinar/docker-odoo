@@ -122,6 +122,7 @@ For the normal workflow:
 - `make rebuild-addons` rebuilds the addons image without cache.
 - `make pull` pulls runtime images.
 - `make up` starts the stack in the normal runtime mode.
+- `make prod` is an explicit alias for the normal production-mode startup (`make up`).
 - `make dev` starts the stack in development mode with `debugpy`, Odoo development helpers and zero workers.
 - `make test` runs tests for installable modules under `local-addons/` in one-shot test mode.
 - `make start` is an alias for `make up`.
@@ -169,6 +170,18 @@ The same pattern works for all Make targets, including migrations:
 ```bash
 make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
 ```
+
+## Runtime Modes
+
+Use explicit mode shortcuts when you want the command itself to communicate intent:
+
+```bash
+make prod
+make dev
+make test
+```
+
+`make prod` is equivalent to the normal `make up` startup and uses only `docker-compose.yml` with `MODE=prod`.
 
 ## Development Mode and Debugging
 
