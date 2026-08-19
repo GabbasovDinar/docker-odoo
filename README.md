@@ -121,7 +121,8 @@ For the normal workflow:
 - `make build-addons` builds only the project addons image.
 - `make rebuild-addons` rebuilds the addons image without cache.
 - `make pull` pulls runtime images.
-- `make up` starts the stack in the background.
+- `make up` starts the stack in the normal runtime mode.
+- `make dev` starts the stack in development mode with `debugpy`, Odoo development helpers and zero workers.
 - `make start` is an alias for `make up`.
 - `make ps` shows service status.
 - `make logs` follows logs from the full stack.
@@ -168,9 +169,9 @@ The same pattern works for all Make targets, including migrations:
 make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
 ```
 
-## Development Mode and Debugging in Cursor
+## Development Mode and Debugging
 
-Development mode is opt-in and uses `docker-compose.dev.yml` in addition to the normal Compose file. Production behavior is unchanged and the debug port is not published unless `MODE=dev` is selected.
+Development mode is opt-in and editor/IDE agnostic. It uses `docker-compose.dev.yml` in addition to the normal Compose file. Production behavior is unchanged and the debug port is not published unless development mode is selected.
 
 The dev runtime enables:
 
@@ -178,24 +179,36 @@ The dev runtime enables:
 - Odoo `--dev=all` by default;
 - `--workers=0` so requests stay in the process attached to the debugger;
 - a loopback-only host mapping for the debug port: `127.0.0.1:5678`;
-- source mapping from local `local-addons/` to `/opt/local-addons` inside the container.
+- local addons mounted from `local-addons/` to `/opt/local-addons` inside the container.
 
-After pulling these changes, rebuild the base image once because `debugpy` and the Odoo launcher are installed into the image:
+After pulling these changes, rebuild the base image once because `debugpy` is installed into the image:
 
 ```bash
 make init
 ```
 
-Start the normal production-style runtime as before:
+Start the normal runtime as before:
 
 ```bash
 make up
 ```
 
-Start development mode with:
+Start development mode with the dedicated shortcut:
+
+```bash
+make dev
+```
+
+This is equivalent to:
 
 ```bash
 make up MODE=dev
+```
+
+Additional Make variables can be passed to `make dev` normally:
+
+```bash
+make dev ENV_FILE=.env.local COMPOSE_PROJECT_NAME=docker-odoo-dev
 ```
 
 Check the resolved Compose files with:
@@ -222,63 +235,34 @@ When debugpy is ready, Odoo logs:
 [debugpy] listening on 0.0.0.0:5678
 ```
 
-### Cursor / VS Code setup
+### Attaching a debugger
 
-The repository contains:
-
-```text
-.vscode/
-  extensions.json
-  launch.json
-```
-
-Install the recommended `Python` and `Python Debugger` extensions in Cursor. Open **Run and Debug** (`Ctrl+Shift+D`), select:
+Any Python debugger client that supports attaching to `debugpy` can be used. Configure the client with:
 
 ```text
-Odoo: Docker Attach
+host: 127.0.0.1
+port: 5678
 ```
 
-and press `F5`.
-
-The launch configuration connects to `127.0.0.1:5678` and maps:
+For source mapping, local custom addons correspond to:
 
 ```text
 local:  <repository>/local-addons
 remote: /opt/local-addons
 ```
 
-### Breakpoints
+The repository includes `.vscode/launch.json` and `.vscode/extensions.json` as a ready-to-use VS Code/Cursor example. They are not required by the runtime and can be ignored when using another editor or IDE.
 
-Open a Python file from `local-addons/` and click in the gutter to the left of the line number. A red dot means the breakpoint is enabled. `F9` toggles a breakpoint on the current line.
+The example configuration uses `justMyCode: false`, which allows stepping from custom modules into Odoo core and other Python code.
 
-After attaching Cursor, perform the corresponding action in Odoo. When execution reaches the breakpoint, the request pauses and Cursor shows variables, watches and the call stack.
-
-Useful debugger controls:
-
-- `F5` — continue execution;
-- `F10` — step over;
-- `F11` — step into;
-- `Shift+F11` — step out;
-- `F9` — add/remove breakpoint;
-- `Shift+F5` — disconnect the debugger without stopping the Odoo container.
-
-The Debug Console evaluates expressions in the current frame, for example:
-
-```python
-self
-self.ids
-self.env.user
-self.env.company
-self.env.context
-self.read(["name"])
-```
+Breakpoints can be added or removed before or after the debugger attaches. A breakpoint only affects future execution of that line; if a request already passed the line, trigger the code path again.
 
 ### Debugging startup code
 
-By default Odoo starts immediately and Cursor can attach later. To stop before Odoo initialization and wait for Cursor:
+By default Odoo starts immediately and a debugger can attach later. To stop before Odoo initialization and wait for the debugger client:
 
 ```bash
-DEBUGPY_WAIT_FOR_CLIENT=1 make up MODE=dev
+DEBUGPY_WAIT_FOR_CLIENT=1 make dev
 ```
 
 The log will show:
@@ -287,20 +271,20 @@ The log will show:
 [debugpy] waiting for debugger client...
 ```
 
-Then attach with `Odoo: Docker Attach` / `F5`. This is useful for module imports, registry initialization, hooks and other startup-only code.
+Attach the debugger to `127.0.0.1:5678`; Odoo startup then continues. This is useful for module imports, registry initialization, hooks and other startup-only code.
 
 While `DEBUGPY_WAIT_FOR_CLIENT=1` is active, the Odoo healthcheck remains unhealthy until the debugger connects because the HTTP server has not started yet.
 
 ### Odoo autoreload and debugger reconnects
 
-`MODE=dev` defaults to `DEV_MODE=all`. Odoo's dev mode includes Python autoreload. When a watched Python file changes, Odoo re-executes itself. The custom debug bootstrap is deliberately kept as the Python entry script, so debugpy starts again after the re-exec instead of disappearing permanently.
+Development mode defaults to `DEV_MODE=all`. Odoo's dev mode includes Python autoreload. When a watched Python file changes, Odoo re-executes itself. The custom debug bootstrap remains the Python entry script, so debugpy starts again after the re-exec instead of disappearing permanently.
 
-The current Cursor debug connection can still disconnect during that re-exec. Press `F5` again to attach to the new process.
+The current debugger connection can still disconnect during that re-exec. Attach again to the new process when needed.
 
 For a more stable step-debugging session, disable Odoo Python autoreload while keeping the other useful development helpers:
 
 ```bash
-DEV_MODE=xml,qweb,access make up MODE=dev
+DEV_MODE=xml,qweb,access make dev
 ```
 
 After changing Python code in this mode, restart Odoo explicitly and attach again:
@@ -314,10 +298,10 @@ make restart MODE=dev
 Override the port if `5678` is already in use:
 
 ```bash
-DEBUGPY_PORT=5679 make up MODE=dev
+DEBUGPY_PORT=5679 make dev
 ```
 
-If you change the port, update `.vscode/launch.json` to use the same port.
+Configure the debugger client to use the same port.
 
 The dev Compose file publishes debugpy only on `127.0.0.1`. Do not publish the debug adapter on a public interface.
 
