@@ -91,8 +91,7 @@ RUN mkdir /tmp/getodoo \
     && rmdir /tmp/getodoo
 
 # --- Install Odoo
-RUN pip install --no-cache-dir -e ${ODOO_DIR} --config-setting=editable-mode=compat \
-    && mv "${VIRTUAL_ENV}/bin/odoo" "${VIRTUAL_ENV}/bin/odoo-real"
+RUN pip install --no-cache-dir -e ${ODOO_DIR} --config-setting=editable-mode=compat
 
 # --- Copy scripts and Odoo configuration files
 RUN mkdir -p /usr/local/share/odoo/tmpl /usr/local/share/odoo/manifests /run/odoo
@@ -100,13 +99,12 @@ RUN mkdir -p /usr/local/share/odoo/tmpl /usr/local/share/odoo/manifests /run/odo
 COPY base/scripts/wait-for-psql.py /usr/local/bin/wait-for-psql.py
 COPY base/scripts/odoorc.py         /usr/local/bin/odoorc.py
 COPY base/scripts/odoo-debug.py     /usr/local/bin/odoo-debug.py
-COPY base/scripts/odoo-launcher.sh  /opt/odoo-venv/bin/odoo
 COPY base/scripts/entrypoint.sh     /
 COPY base/scripts/extra-addons.sh   /
 COPY base/config/odoo.conf.tpl      /usr/local/share/odoo/tmpl/odoo.conf.tpl
 COPY base/manifests/enterprise.yml  /usr/local/share/odoo/manifests/enterprise.yml
 
-RUN chmod +x /usr/local/bin/wait-for-psql.py /usr/local/bin/wkhtmltopdf /usr/local/bin/odoo-debug.py /opt/odoo-venv/bin/odoo /entrypoint.sh /extra-addons.sh && chown -R odoo:odoo /run/odoo
+RUN chmod +x /usr/local/bin/wait-for-psql.py /usr/local/bin/wkhtmltopdf /usr/local/bin/odoo-debug.py /entrypoint.sh /extra-addons.sh && chown -R odoo:odoo /run/odoo
 
 # --- Create base odoo config file
 RUN printf "[options]\ndata_dir = %s\n" "${ODOO_DATA_DIR}" > "${ODOO_RC}" && chown odoo:odoo "${ODOO_RC}"
