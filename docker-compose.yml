@@ -5,18 +5,25 @@ services:
       context: .
       dockerfile: base/Dockerfile
       secrets:
+        - source: odoo_git_auth_token
+          target: GIT_AUTH_TOKEN
+        - source: odoo_git_auth_header
+          target: GIT_AUTH_HEADER
         - source: odoo_ee_git_token
           target: odoo_ee_git_token
       args:
         ODOO_EDITION: ${ODOO_EDITION:-ce} # ce (Odoo Community Edition) or ee (Odoo Enterprise Edition)
+
+        # Community source repository and ref. ODOO_REF wins over ODOO_BRANCH.
+        # ODOO_CE_REF/ODOO_CE_VERSION are retained as compatibility fallbacks for existing env files.
+        ODOO_REPO: ${ODOO_REPO:-https://github.com/odoo/odoo.git}
+        ODOO_REF: ${ODOO_REF:-${ODOO_CE_REF:-${ODOO_BRANCH:-${ODOO_CE_VERSION:-${ODOO_VERSION:-17.0}}}}}
 
         # For Enterprise private repository authentication
         ODOO_EE_GIT_USER: ${ODOO_EE_GIT_USER:-${GITHUB_USER:-x-access-token}}
         ODOO_EE_GIT_HOST: ${ODOO_EE_GIT_HOST:-${GITHUB_HOST:-github.com}}
 
         # Optional Arguments (you can change default values if needed just uncomment and change the values in .env file)
-        ODOO_CE_VERSION: ${ODOO_CE_VERSION:-${ODOO_VERSION:-17.0}} # CE series/tag used as a fallback
-        ODOO_CE_REF: ${ODOO_CE_REF:-${ODOO_CE_VERSION:-${ODOO_VERSION:-17.0}}} # CE branch/tag/commit to fetch
         ODOO_EE_VERSION: ${ODOO_EE_VERSION:-${ODOO_VERSION:-17.0}} # EE series/tag used as a fallback
         ODOO_ENTERPRISE_REF: ${ODOO_ENTERPRISE_REF:-${ODOO_EE_VERSION:-${ODOO_VERSION:-17.0}}} # EE branch/tag/commit to fetch
         ODOO_EE_ADDONS_DIR: ${ODOO_EE_ADDONS_DIR:-/opt/enterprise-addons} # EE addons directory
@@ -111,7 +118,8 @@ services:
     restart: unless-stopped
 
   redis:
-    image: ${REDIS_IMAGE:-redis:7.4-alpine}
+    image: ${REDIS_IMAGE:-redis:7.4-alpine
+    }
     user: redis
     command: >
       sh -c 'exec redis-server
@@ -186,6 +194,10 @@ networks:
   reports:
 
 secrets:
+  odoo_git_auth_token:
+    environment: ODOO_GIT_AUTH_TOKEN
+  odoo_git_auth_header:
+    environment: ODOO_GIT_AUTH_HEADER
   odoo_ee_git_token:
     environment: ODOO_EE_GIT_TOKEN
   github_token:
