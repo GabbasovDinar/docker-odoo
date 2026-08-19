@@ -18,6 +18,13 @@ ARG ODOO_EDITION=ce
 # Community source repository and branch/tag/full commit SHA.
 ARG ODOO_REPO=https://github.com/odoo/odoo.git
 ARG ODOO_REF=17.0
+# --- Git authentication variables
+ARG GIT_HOST=
+ARG GIT_USER=oauth2
+ARG GITHUB_HOST=github.com
+ARG GITLAB_HOST=gitlab.com
+ARG GITHUB_USER=x-access-token
+ARG GITLAB_USER=oauth2
 ARG ODOO_EE_VERSION=17.0
 ARG KWKHTMLTOPDF_CLIENT_REF=1.0
 # --- Enterprise variables
@@ -74,9 +81,18 @@ RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # --- Source Odoo
-# BuildKit clones the selected Git source directly. GIT_AUTH_TOKEN or
-# GIT_AUTH_HEADER build secrets are used automatically for private HTTPS repos.
-ADD ${ODOO_REPO}#${ODOO_REF} ${ODOO_DIR}/
+# Use normal Git so fetch depth is explicit and private HTTPS repositories can
+# reuse the same temporary .netrc authentication as extra addon repositories.
+COPY base/scripts/git-auth.sh /usr/local/lib/odoo/git-auth.sh
+COPY base/scripts/odoo-source.sh /usr/local/bin/odoo-source
+RUN chmod +x /usr/local/bin/odoo-source
+RUN --mount=type=secret,id=github_token,required=false \
+    --mount=type=secret,id=gitlab_token,required=false \
+    --mount=type=secret,id=git_token,required=false \
+    GITHUB_TOKEN="$(cat /run/secrets/github_token 2>/dev/null || true)" \
+    GITLAB_TOKEN="$(cat /run/secrets/gitlab_token 2>/dev/null || true)" \
+    GIT_TOKEN="$(cat /run/secrets/git_token 2>/dev/null || true)" \
+    /usr/local/bin/odoo-source
 
 # --- Install Odoo python requirements from the exact source checkout
 RUN pip install --no-cache-dir -r ${ODOO_DIR}/requirements.txt
