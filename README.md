@@ -48,10 +48,10 @@ Copy the example env file:
 cp .env.example .env
 ```
 
-Set `ODOO_VERSION` to the checked-out branch version. For example, on branch `17.0`:
+Set `ODOO_VERSION` to the checked-out branch version. For example, on branch `18.0`:
 
 ```env
-ODOO_VERSION=17.0
+ODOO_VERSION=18.0
 ODOO_EDITION=ce
 DATABASE_NAME=odoo
 DB_NAME=${DATABASE_NAME}
@@ -168,7 +168,7 @@ make up ENV_FILE=.env.staging COMPOSE_PROJECT_NAME=docker-odoo-staging
 The same pattern works for all Make targets, including migrations:
 
 ```bash
-make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
+make migrate ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
 ```
 
 ## Runtime Modes
@@ -520,11 +520,11 @@ When `TEST_DB` points to an existing initialized database, automatic database cr
 
 The base image fetches the Odoo Community source with normal Git using an explicit shallow fetch (`git fetch --depth=1 --no-tags`). The source repository and revision are independent from the Docker image tag, so the build can use the official upstream repository, a fork, a self-hosted GitLab repository, a branch, a tag, or a pinned commit without changing `base/Dockerfile`.
 
-The default configuration builds Odoo 17 from the official GitHub repository:
+The default configuration builds Odoo 18 from the official GitHub repository:
 
 ```env
 ODOO_EDITION=ce
-ODOO_VERSION=17.0
+ODOO_VERSION=18.0
 ODOO_REPO=https://github.com/odoo/odoo.git
 ODOO_BRANCH=${ODOO_VERSION}
 ODOO_REF=
@@ -544,7 +544,7 @@ For example, to build from a self-hosted public GitLab fork:
 
 ```env
 ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
-ODOO_BRANCH=17.0
+ODOO_BRANCH=18.0
 ODOO_REF=
 ```
 
@@ -562,7 +562,7 @@ For reproducible builds, set `ODOO_REF` to the full 40-character Git commit SHA:
 
 ```env
 ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
-ODOO_BRANCH=17.0
+ODOO_BRANCH=18.0
 ODOO_REF=0123456789abcdef0123456789abcdef01234567
 ```
 
@@ -589,7 +589,7 @@ For a private self-hosted GitLab repository using a Personal Access Token or Pro
 
 ```env
 ODOO_REPO=https://gitlab.my.com/odoo-project/odoo.git
-ODOO_BRANCH=17.0
+ODOO_BRANCH=18.0
 ODOO_REF=0123456789abcdef0123456789abcdef01234567
 
 GITLAB_HOST=gitlab.my.com
@@ -643,9 +643,9 @@ Enterprise mode uses the same configurable Community/core source described above
 
 ```env
 ODOO_EDITION=ee
-ODOO_VERSION=17.0
+ODOO_VERSION=18.0
 ODOO_REPO=https://github.com/odoo/odoo.git
-ODOO_BRANCH=17.0
+ODOO_BRANCH=18.0
 ODOO_REF=
 ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
 ODOO_EE_GIT_TOKEN=your_token
@@ -793,14 +793,14 @@ OPENUPGRADE_TARGET_DATABASE_NAME
 migrated target database
 ```
 
-Example for `16.0 -> 17.0`:
+Example for `17.0 -> 18.0`:
 
 ```env
-ODOO_VERSION=17.0
+ODOO_VERSION=18.0
 OPENUPGRADE=True
-OPENUPGRADE_SOURCE_DATABASE_NAME=ODOO_16
-OPENUPGRADE_TARGET_DATABASE_NAME=ODOO_17
-OPENUPGRADE_TARGET_VERSION=17.0
+OPENUPGRADE_SOURCE_DATABASE_NAME=ODOO_17
+OPENUPGRADE_TARGET_DATABASE_NAME=ODOO_18
+OPENUPGRADE_TARGET_VERSION=18.0
 OPENUPGRADE_RECREATE_DATABASE=False
 OPENUPGRADE_FORCE=False
 OPENUPGRADE_COPY_FILESTORE=True
@@ -809,8 +809,8 @@ OPENUPGRADE_COPY_FILESTORE=True
 The result is:
 
 ```text
-ODOO_16    unchanged source database
-ODOO_17    copy of ODOO_16, migrated to Odoo 17
+ODOO_17    unchanged source database
+ODOO_18    copy of ODOO_17, migrated to Odoo 18
 ```
 
 Use `openupgrade.env.example` as the starting point on branches that contain the OpenUpgrade workflow.
@@ -884,8 +884,8 @@ DB_USER=odoo_migration
 DB_PASSWORD=CHANGE_ME_DB_PASSWORD
 
 OPENUPGRADE=True
-OPENUPGRADE_SOURCE_DATABASE_NAME=production16
-OPENUPGRADE_TARGET_DATABASE_NAME=migration17
+OPENUPGRADE_SOURCE_DATABASE_NAME=production17
+OPENUPGRADE_TARGET_DATABASE_NAME=migration18
 ```
 
 Current source-to-target cloning expects both databases to be on the same configured PostgreSQL endpoint:
@@ -894,8 +894,8 @@ Current source-to-target cloning expects both databases to be on the same config
 Migration VM                         PostgreSQL VM
 Docker / OpenUpgrade                10.20.0.15:5432
 +----------------------+            +----------------------+
-| pg_dump / pg_restore |----------->| production16         |
-| Odoo target version  |            | migration17          |
+| pg_dump / pg_restore |----------->| production17         |
+| Odoo target version  |            | migration18          |
 +----------------------+            +----------------------+
 ```
 
@@ -983,14 +983,14 @@ For example, first copy the files from the old Odoo server to the migration host
 
 ```bash
 rsync -a \
-  odoo@old-odoo-vm:/var/lib/odoo/filestore/production16/ \
-  /path/to/source-filestore/production16/
+  odoo@old-odoo-vm:/var/lib/odoo/filestore/production17/ \
+  /path/to/source-filestore/production17/
 ```
 
 Then ensure that the content is available inside the migration container as:
 
 ```text
-/var/lib/odoo/filestore/production16
+/var/lib/odoo/filestore/production17
 ```
 
 If the source filestore is not visible, the entrypoint logs a warning and continues with the database migration. Attachments, documents, images, and other filestore-backed records cannot be fully validated until the filestore is available.
@@ -1004,7 +1004,7 @@ Module-local migration scripts should live in the addon itself, for example:
 ```text
 my_module/
   migrations/
-    17.0.1.0.0/
+    18.0.1.0.0/
       pre-migration.py
       post-migration.py
 ```
@@ -1045,15 +1045,15 @@ For every hop:
 11. after success, run `make up ENV_FILE=<migration-env>` and functionally validate Odoo;
 12. use that successfully migrated target database as the source for the next major-version hop.
 
-Example `16 -> 17`:
+Example `17 -> 18`:
 
 ```bash
-git switch 17.0
-cp openupgrade.env.example .env.migrate-17
-# edit .env.migrate-17
-make init ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
-make migrate ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
-make up ENV_FILE=.env.migrate-17 COMPOSE_PROJECT_NAME=odoo-migrate-17
+git switch 18.0
+cp openupgrade.env.example .env.migrate-18
+# edit .env.migrate-18
+make init ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
+make migrate ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
+make up ENV_FILE=.env.migrate-18 COMPOSE_PROJECT_NAME=odoo-migrate-18
 ```
 
 Do not continue to the next major version from a database whose current hop has not been validated.
@@ -1431,8 +1431,8 @@ Verify the configured target environment before running restore because it is de
 
 ## References
 
-- [Odoo 17 documentation](https://www.odoo.com/documentation/17.0/)
-- [Odoo 17 testing documentation](https://www.odoo.com/documentation/17.0/developer/reference/backend/testing.html)
+- [Odoo 18 documentation](https://www.odoo.com/documentation/18.0/)
+- [Odoo 18 testing documentation](https://www.odoo.com/documentation/18.0/developer/reference/backend/testing.html)
 - [Git fetch documentation](https://git-scm.com/docs/git-fetch)
 - [Docker build secrets](https://docs.docker.com/build/building/secrets/)
 - [OCA/oca-ci](https://github.com/OCA/oca-ci)

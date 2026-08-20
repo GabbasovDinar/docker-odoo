@@ -89,7 +89,7 @@ ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 ARG ODOO_DIR=/opt/odoo
 
 ARG ODOO_REPO=https://github.com/odoo/odoo.git
-ARG ODOO_REF=17.0
+ARG ODOO_REF=18.0
 
 # Git authentication configuration.
 # Actual tokens are passed only through BuildKit secrets below.
@@ -235,7 +235,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt \
 
 ARG ODOO_EDITION=ce
 
-ARG ODOO_EE_VERSION=17.0
+ARG ODOO_EE_VERSION=18.0
 ARG ODOO_ENTERPRISE_REF=${ODOO_EE_VERSION}
 
 ARG ODOO_ENTERPRISE_REPO=https://github.com/odoo/enterprise.git
