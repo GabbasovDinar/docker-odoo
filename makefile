@@ -2,6 +2,7 @@ ENV_FILE ?= .env
 COMPOSE_PROJECT_NAME ?= docker-odoo
 MODE ?= prod
 COMPOSE_FILES ?= -f docker-compose.yml $(if $(filter dev,$(MODE)),-f docker-compose.dev.yml) $(if $(filter test,$(MODE)),-f docker-compose.test.yml)
+MIGRATION_LOG ?= migration.log
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -89,14 +90,47 @@ test:
 	$(COMPOSE) run --rm $(TEST_RUN_ENV) $(ADDONS_SERVICE) odoo-test $(ARGS)
 
 .PHONY: migrate
-migrate: check-env ## Run OpenUpgrade once and overwrite migration.log
-	@rm -f migration.log
-	@set -o pipefail; { \
+migrate: check-env ## Run OpenUpgrade in background and follow migration logs
+	@rm -f "$(MIGRATION_LOG)"
+	@set -u -o pipefail; \
+		start_ts="$$(date +%s)"; \
 		printf "Stopping the normal Odoo service before migration...\n"; \
 		$(COMPOSE) stop $(ADDONS_SERVICE) || true; \
 		printf "Starting OpenUpgrade migration...\n"; \
-		$(COMPOSE) run --rm $(ADDONS_SERVICE) openupgrade; \
-	} 2>&1 | tee migration.log
+		if ! container_id="$$( \
+			$(COMPOSE) run -d --rm $(ADDONS_SERVICE) openupgrade \
+		)"; then \
+			printf "ERROR: failed to start migration container\n" \
+				| tee -a "$(MIGRATION_LOG)"; \
+			exit 1; \
+		fi; \
+		printf "Migration container: %s\n" "$$container_id"; \
+		printf "Following migration logs...\n\n"; \
+		status_file="$$(mktemp)"; \
+		trap 'rm -f "$$status_file"' EXIT; \
+		docker wait "$$container_id" > "$$status_file" & \
+		wait_pid="$$!"; \
+		docker logs -f "$$container_id" 2>&1 \
+			| tee "$(MIGRATION_LOG)" || true; \
+		wait "$$wait_pid" || true; \
+		status="$$(cat "$$status_file" 2>/dev/null || printf '1')"; \
+		end_ts="$$(date +%s)"; \
+		duration="$$(($$end_ts - $$start_ts))"; \
+		hours="$$(($$duration / 3600))"; \
+		minutes="$$(($$duration % 3600 / 60))"; \
+		seconds="$$(($$duration % 60))"; \
+		printf "\n"; \
+		if [ "$$status" -eq 0 ]; then \
+			printf "Migration completed successfully (exit code 0).\n" \
+				| tee -a "$(MIGRATION_LOG)"; \
+		else \
+			printf "Migration failed (exit code %s).\n" "$$status" \
+				| tee -a "$(MIGRATION_LOG)"; \
+		fi; \
+		printf "Migration duration: %02d:%02d:%02d\n" \
+			"$$hours" "$$minutes" "$$seconds" \
+			| tee -a "$(MIGRATION_LOG)"; \
+		exit "$$status"
 
 .PHONY: start
 start: up
