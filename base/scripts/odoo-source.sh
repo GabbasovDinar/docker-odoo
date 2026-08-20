@@ -2,7 +2,7 @@
 set -euo pipefail
 
 : "${ODOO_REPO:=https://github.com/odoo/odoo.git}"
-: "${ODOO_REF:=17.0}"
+: "${ODOO_REF:=19.0}"
 : "${ODOO_DIR:=/opt/odoo}"
 
 # shellcheck source=base/scripts/git-auth.sh

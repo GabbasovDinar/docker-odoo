@@ -7,7 +7,7 @@
     merges:
         -
             remote: remote_1
-            ref: "18.0"
+            ref: "19.0"
             depth: 1
     target: oca-web
 
@@ -17,7 +17,7 @@
     merges:
         -
             remote: remote_1
-            ref: "18.0"
+            ref: "19.0"
             depth: 1
     target: oca-server-tools
 
@@ -27,7 +27,7 @@
     merges:
         -
             remote: remote_1
-            ref: "18.0"
+            ref: "19.0"
             depth: 1
     target: camptocamp-odoo-cloud-platform
 
@@ -37,6 +37,6 @@
     merges:
         -
             remote: remote_1
-            ref: "18.0"
+            ref: "19.0"
             depth: 1
     target: oca-openupgrade
